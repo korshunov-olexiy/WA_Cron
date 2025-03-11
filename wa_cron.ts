@@ -48,6 +48,7 @@ class WhatsAppBot {
     this.sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
       if (qr) {
+        // якщо нема авторизації
         console.log(`${this.config.highlightStart}Відскануйте QR-код для авторизації:${this.config.highlightEnd}`, qr);
       }
       if (connection === 'close') {
