@@ -16,7 +16,7 @@ npm install ts-node --save-dev
 ```
 І наступні залежності:
 ```bash
-npm install @whiskeysockets/baileys qrcode-terminal node-cron pino @types/node-cron @hapi/boom cli-progress @types/cli-progress
+npm install @whiskeysockets/baileys qrcode-terminal node-cron pino @types/node-cron @hapi/boom
 ```
 Ініціалізувати конфігураційний файл:
 ```bash
