@@ -1,12 +1,11 @@
 import { Boom } from '@hapi/boom';
-import makeWASocket, { DisconnectReason, Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
-import cron from 'node-cron';
+import makeWASocket, { Browsers, DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import * as fs from 'fs';
+import cron from 'node-cron';
 import * as path from 'path';
 import pino from 'pino';
 
 interface Config {
-  app_name: string;
   group: string;
   message: string;
   sendTime: string;
@@ -14,12 +13,13 @@ interface Config {
   highlightEnd: string;
   errorHighlightStart: string;
   errorHighlightEnd: string;
+  app_name: string;
 }
 
 class WhatsAppBot {
   private sock: WASocket | null = null;
   private config: Config;
-
+  private messageSent: boolean = false;
   constructor(configPath: string) {
     this.config = this.readConfig(configPath);
   }
@@ -27,7 +27,7 @@ class WhatsAppBot {
   private readConfig(filePath: string): Config {
     const fullPath = path.resolve(__dirname, filePath);
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`${this.config.errorHighlightStart}Файл ${filePath} не знайдено.${this.config.errorHighlightEnd}`);
+      throw new Error(`Файл ${filePath} не знайдено.`);
     }
     return JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
   }
@@ -44,14 +44,14 @@ class WhatsAppBot {
     this.sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
       if (qr) {
-        console.log(`${this.config.highlightStart}Відскануйте QR-код для авторизації:${this.config.highlightEnd}`, qr);
+        console.log(`${this.config.highlightStart}Відскануйте QR-код для авторизації:${this.config.highlightEnd}\n`, qr);
       }
       if (connection === 'close') {
         const shouldReconnect =
           (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
         console.error(`${this.config.errorHighlightStart}З’єднання закрито. Перезапуск...${this.config.errorHighlightEnd}`, shouldReconnect);
         if (shouldReconnect) {
-          this.initialize();
+          await this.initialize();
         } else {
           console.error(`${this.config.errorHighlightStart}Авторизацію не виконано. Завершення роботи.${this.config.errorHighlightEnd}`);
           process.exit(1);
@@ -59,6 +59,7 @@ class WhatsAppBot {
       } else if (connection === 'open') {
         console.log(`${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
         this.scheduleMessage();
+        await this.checkMissedMessage();
       }
     });
     this.sock.ev.on('creds.update', saveCreds);
@@ -68,6 +69,7 @@ class WhatsAppBot {
     const [hour, minute] = this.config.sendTime.split(':');
     cron.schedule(`${minute} ${hour} * * *`, async () => {
       await this.sendMessage();
+      this.messageSent = true;
       this.showCountdown(hour, minute);
     });
     this.showCountdown(hour, minute);
@@ -85,14 +87,27 @@ class WhatsAppBot {
         return;
       }
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
-      console.log(`${this.config.highlightStart}Повідомлення відправлене у \"${this.config.group}\".${this.config.highlightEnd}`);
+      this.messageSent = true;
+      console.log(`\n${this.config.highlightStart}Повідомлення відправлене у \"${this.config.group}\".${this.config.highlightEnd}`);
     } catch (error) {
-      console.error(`${this.config.errorHighlightStart}Помилка при відправці: ${this.config.errorHighlightEnd}`, error);
+      console.error(`${this.config.errorHighlightStart}Помилка при відправці:${this.config.errorHighlightEnd}`, error);
+    }
+  }
+
+  private async checkMissedMessage() {
+    const [hour, minute] = this.config.sendTime.split(':');
+    const scheduledTime = new Date();
+    scheduledTime.setHours(parseInt(hour), parseInt(minute), 0, 0);
+    const now = new Date();
+    const diffMs = now.getTime() - scheduledTime.getTime();
+    if (!this.messageSent && diffMs > 0 && diffMs <= 600000) { // 10 хвилин
+      console.log(`${this.config.highlightStart}Виявлено пропущене повідомлення.${this.config.highlightEnd} ${this.config.errorHighlightStart}Відправляємо зараз...${this.config.errorHighlightEnd}`);
+      await this.sendMessage();
     }
   }
 
   private showCountdown(hour: string, minute: string) {
-    const updateInterval = setInterval(() => {
+    setInterval(() => {
       const now = new Date();
       const next = new Date();
       next.setHours(parseInt(hour), parseInt(minute), 0, 0);
@@ -101,9 +116,8 @@ class WhatsAppBot {
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart}${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}  `);
-      if (diffHours === 0 && diffMinutes === 0 && diffSeconds <= 0) {
-        clearInterval(updateInterval);
+      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
+      if (diffMs <= 0) {
         process.stdout.write('\n');
       }
     }, 1000);
