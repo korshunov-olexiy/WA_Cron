@@ -1,11 +1,12 @@
 import { Boom } from '@hapi/boom';
-import makeWASocket, { Browsers, DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
-import * as fs from 'fs';
+import makeWASocket, { DisconnectReason, Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import cron from 'node-cron';
+import * as fs from 'fs';
 import * as path from 'path';
 import pino from 'pino';
 
 interface Config {
+  app_name: string;
   group: string;
   message: string;
   sendTime: string;
@@ -13,13 +14,14 @@ interface Config {
   highlightEnd: string;
   errorHighlightStart: string;
   errorHighlightEnd: string;
-  app_name: string;
 }
 
 class WhatsAppBot {
   private sock: WASocket | null = null;
   private config: Config;
   private messageSent: boolean = false;
+  private pendingMessage: boolean = false;
+
   constructor(configPath: string) {
     this.config = this.readConfig(configPath);
   }
@@ -27,7 +29,7 @@ class WhatsAppBot {
   private readConfig(filePath: string): Config {
     const fullPath = path.resolve(__dirname, filePath);
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`Файл ${filePath} не знайдено.`);
+      throw new Error(`${this.config.errorHighlightStart}Файл ${filePath} не знайдено.${this.config.errorHighlightEnd}`);
     }
     return JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
   }
@@ -59,7 +61,9 @@ class WhatsAppBot {
       } else if (connection === 'open') {
         console.log(`${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
         this.scheduleMessage();
-        await this.checkMissedMessage();
+        if (this.pendingMessage) {
+          await this.checkMissedMessage();
+        }
       }
     });
     this.sock.ev.on('creds.update', saveCreds);
@@ -68,29 +72,31 @@ class WhatsAppBot {
   private scheduleMessage() {
     const [hour, minute] = this.config.sendTime.split(':');
     cron.schedule(`${minute} ${hour} * * *`, async () => {
+      this.messageSent = false;
       await this.sendMessage();
-      this.messageSent = true;
       this.showCountdown(hour, minute);
     });
     this.showCountdown(hour, minute);
   }
 
   private async sendMessage() {
-    if (!this.sock) return;
+    if (!this.sock || this.messageSent) return;
     try {
       const groups = await this.sock.groupFetchAllParticipating();
       const groupMetadata = Object.values(groups).find(
         (group) => group.subject === this.config.group
       );
       if (!groupMetadata) {
-        console.error(`${this.config.errorHighlightStart}Група \"${this.config.group}\" не знайдена.${this.config.errorHighlightEnd}`);
+        console.error(`\n${this.config.errorHighlightStart}Група \"${this.config.group}\" не знайдена.${this.config.errorHighlightEnd}`);
         return;
       }
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
       this.messageSent = true;
+      this.pendingMessage = false;
       console.log(`\n${this.config.highlightStart}Повідомлення відправлене у \"${this.config.group}\".${this.config.highlightEnd}`);
     } catch (error) {
-      console.error(`${this.config.errorHighlightStart}Помилка при відправці:${this.config.errorHighlightEnd}`, error);
+      this.pendingMessage = true;
+      console.error(`\n${this.config.errorHighlightStart}Помилка при відправці: ${this.config.errorHighlightEnd}`, error);
     }
   }
 
@@ -101,7 +107,6 @@ class WhatsAppBot {
     const now = new Date();
     const diffMs = now.getTime() - scheduledTime.getTime();
     if (!this.messageSent && diffMs > 0 && diffMs <= 600000) { // 10 хвилин
-      console.log(`${this.config.highlightStart}Виявлено пропущене повідомлення.${this.config.highlightEnd} ${this.config.errorHighlightStart}Відправляємо зараз...${this.config.errorHighlightEnd}`);
       await this.sendMessage();
     }
   }
@@ -116,9 +121,10 @@ class WhatsAppBot {
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
+      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.highlightEnd}`);
       if (diffMs <= 0) {
-        process.stdout.write('\n');
+        this.messageSent = false;
+        this.pendingMessage = true;
       }
     }, 1000);
   }
