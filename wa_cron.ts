@@ -34,7 +34,7 @@ class WhatsAppBot {
   }
 
   private saveConfig() {
-    fs.writeFileSync(path.resolve(__dirname, './config.json'), JSON.stringify(this.config, null, 2));
+    fs.writeFileSync(path.resolve(__dirname, this.configPath), JSON.stringify(this.config, null, 2));
   }
 
   async initialize() {
