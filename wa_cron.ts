@@ -41,6 +41,7 @@ class WhatsAppBot {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     this.sock = makeWASocket({
       auth: state,
+      browser: Browsers.baileys(this.config.app_name),
       logger: pino({ level: 'silent' }),
       printQRInTerminal: true,
       keepAliveIntervalMs: 60000,
