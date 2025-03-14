@@ -29,6 +29,7 @@ tsc --init
     "group": "Назва групи для відправки повідомлення",
     "message": "текст повідомлення",
     "sendTime": "15:28",
+    "msgSentToday": false,
     "highlightStart": "\u001b[1;30;42m",
     "highlightEnd": "\u001b[0m",
     "errorHighlightStart": "\u001b[1;37;41m",
