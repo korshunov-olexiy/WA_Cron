@@ -54,7 +54,7 @@ class WhatsAppBot {
       if (connection === 'close') {
         const shouldReconnect =
           (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-        console.error(`\n${this.config.errorHighlightStart}З’єднання закрито. Перезапуск...${this.config.errorHighlightEnd}`, shouldReconnect);
+        // console.error(`\n${this.config.errorHighlightStart}З’єднання закрито. Перезапуск...${this.config.errorHighlightEnd}`, shouldReconnect);
         if (shouldReconnect) {
           this.initialize();
         } else {
@@ -62,7 +62,7 @@ class WhatsAppBot {
           process.exit(1);
         }
       } else if (connection === 'open') {
-        console.log(`\n${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
+        // console.log(`\n${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
         this.scheduleMessage();
       }
     });
