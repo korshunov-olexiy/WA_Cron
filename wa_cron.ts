@@ -74,12 +74,12 @@ class WhatsAppBot {
     const [hour, minute] = this.config.sendTime.split(':');
     // Запуск відправки щодня за розкладом
     cron.schedule(`${minute} ${hour} * * *`, async () => {
-      const nextDay = new Date(new Date().getTime() + (1000 * 60 * 60 * 24));
       if (!this.config.msgSentToday) {
         const sent = await this.sendMessage();
         this.config.msgSentToday = sent;
         this.saveConfig();
-        console.log(`${this.config.highlightStart}Наступне повідомлення: ${nextDay}, ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
+        const nextday = this.getNextDay();
+        console.log(`${this.config.highlightStart}Наступне повідомлення: ${nextday}, ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
       }
     });
     // Щодня опівночі скидаємо прапорець msgSentToday
@@ -111,25 +111,16 @@ class WhatsAppBot {
     }
   }
 
-  /*private showCountdown(hour: string, minute: string): void {
-    setInterval(() => {
-      const now = new Date();
-      let nextSend = new Date();
-      nextSend.setHours(parseInt(hour), parseInt(minute), 0, 0);
-      if (nextSend <= now) nextSend.setDate(nextSend.getDate() + 1);
-      const diffMs = nextSend.getTime() - now.getTime();
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
-      const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      const countdownText = `${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`;
-      process.stdout.clearLine(0);
-      process.stdout.cursorTo(0);
-      process.stdout.write(countdownText);
-      if (diffMs <= 0) {
-        process.stdout.write('\n');
-      }
-    }, 1000);
-  }*/
+  private getNextDay() {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const year = tomorrow.getFullYear();
+    const nextDay = `${day}.${month}.${year}`;
+    return nextDay;
+  }
 }
 
 const bot = new WhatsAppBot('./config.json');
