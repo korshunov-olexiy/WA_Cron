@@ -79,7 +79,7 @@ class WhatsAppBot {
         this.config.msgSentToday = sent;
         this.saveConfig();
         const nextday = this.getNextDay();
-        console.log(`${this.config.highlightStart}Наступне повідомлення: ${nextday}, ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
+        console.log(`${this.config.highlightStart}Наступне повідомлення:${this.config.highlightEnd}${this.config.errorHighlightStart} ${nextday}, ${hour}:${minute}${this.config.errorHighlightEnd}`);
       }
     });
     // Щодня опівночі скидаємо прапорець msgSentToday
@@ -88,7 +88,7 @@ class WhatsAppBot {
       this.saveConfig();
     });
     // this.showCountdown(hour, minute);
-    console.log(`${this.config.highlightStart}Наступне повідомлення о ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
+    console.log(`${this.config.highlightStart}Наступне повідомлення о ${this.config.highlightEnd}${this.config.errorHighlightStart}${hour}:${minute}${this.config.errorHighlightEnd}`);
   }
 
   private async sendMessage(): Promise<boolean> {
