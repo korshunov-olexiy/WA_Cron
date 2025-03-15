@@ -110,17 +110,20 @@ class WhatsAppBot {
   private showCountdown(hour: string, minute: string): void {
     setInterval(() => {
       const now = new Date();
-      const next = new Date();
-      next.setHours(parseInt(hour), parseInt(minute), 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      const diffMs = next.getTime() - now.getTime();
+      let nextSend = new Date();
+      nextSend.setHours(parseInt(hour), parseInt(minute), 0, 0);
+      if (nextSend <= now) nextSend.setDate(nextSend.getDate() + 1);
+
+      const diffMs = nextSend.getTime() - now.getTime();
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
-      if (diffMs <= 0) {
-        process.stdout.write('\n');
-      }
+
+      const countdownText = `${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${diffHours}год ${diffMinutes}хв ${diffSeconds}сек  `;
+
+      process.stdout.clearLine(0);
+      process.stdout.cursorTo(0);
+      process.stdout.write(countdownText);
     }, 1000);
   }
 }
