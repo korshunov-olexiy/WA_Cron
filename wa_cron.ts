@@ -86,8 +86,7 @@ class WhatsAppBot {
       this.config.msgSentToday = false;
       this.saveConfig();
     });
-
-    this.countdownNextMessage(hour, minute);
+    this.showCountdown(hour, minute);
   }
 
   private async sendMessage(): Promise<boolean> {
@@ -108,17 +107,20 @@ class WhatsAppBot {
     }
   }
 
-  private countdownNextMessage(hour: string, minute: string): void {
+  private showCountdown(hour: string, minute: string): void {
     setInterval(() => {
       const now = new Date();
-      let nextSend = new Date();
-      nextSend.setHours(parseInt(hour), parseInt(minute), 0, 0);
-      if (nextSend <= now) nextSend.setDate(nextSend.getDate() + 1);
-      const diffMs = nextSend.getTime() - now.getTime();
+      const next = new Date();
+      next.setHours(parseInt(hour), parseInt(minute), 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      const diffMs = next.getTime() - now.getTime();
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${diffHours}год ${diffMinutes}хв ${diffSeconds}сек  `);
+      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
+      if (diffMs <= 0) {
+        process.stdout.write('\n');
+      }
     }, 1000);
   }
 }
