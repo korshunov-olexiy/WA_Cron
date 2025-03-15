@@ -100,8 +100,8 @@ class WhatsAppBot {
         return false;
       }
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
-      process.stdout.clearLine(0);
-      process.stdout.cursorTo(0);
+      // process.stdout.clearLine(0);
+      // process.stdout.cursorTo(0);
       console.log(`${this.config.highlightStart}Повідомлення відправлене у "${this.config.group}".${this.config.highlightEnd}`);
       return true;
     } catch (error) {
