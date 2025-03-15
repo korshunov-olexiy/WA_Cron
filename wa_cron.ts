@@ -86,7 +86,8 @@ class WhatsAppBot {
       this.config.msgSentToday = false;
       this.saveConfig();
     });
-    this.showCountdown(hour, minute);
+    // this.showCountdown(hour, minute);
+    process.stdout.write(`${this.config.highlightStart}Наступне повідомлення о ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
   }
 
   private async sendMessage(): Promise<boolean> {
@@ -109,7 +110,7 @@ class WhatsAppBot {
     }
   }
 
-  private showCountdown(hour: string, minute: string): void {
+  /*private showCountdown(hour: string, minute: string): void {
     setInterval(() => {
       const now = new Date();
       let nextSend = new Date();
@@ -127,7 +128,7 @@ class WhatsAppBot {
         process.stdout.write('\n');
       }
     }, 1000);
-  }
+  }*/
 }
 
 const bot = new WhatsAppBot('./config.json');
