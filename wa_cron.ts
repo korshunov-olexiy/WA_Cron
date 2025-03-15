@@ -99,6 +99,8 @@ class WhatsAppBot {
         return false;
       }
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
+      process.stdout.clearLine(0);
+      process.stdout.cursorTo(0);
       console.log(`${this.config.highlightStart}Повідомлення відправлене у "${this.config.group}".${this.config.highlightEnd}`);
       return true;
     } catch (error) {
@@ -113,14 +115,11 @@ class WhatsAppBot {
       let nextSend = new Date();
       nextSend.setHours(parseInt(hour), parseInt(minute), 0, 0);
       if (nextSend <= now) nextSend.setDate(nextSend.getDate() + 1);
-
       const diffMs = nextSend.getTime() - now.getTime();
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-
-      const countdownText = `${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${diffHours}год ${diffMinutes}хв ${diffSeconds}сек  `;
-
+      const countdownText = `\r${this.config.highlightStart}Наступне повідомлення через${this.config.highlightEnd} ${this.config.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`;
       process.stdout.clearLine(0);
       process.stdout.cursorTo(0);
       process.stdout.write(countdownText);
