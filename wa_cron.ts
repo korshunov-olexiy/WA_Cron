@@ -74,11 +74,12 @@ class WhatsAppBot {
     const [hour, minute] = this.config.sendTime.split(':');
     // Запуск відправки щодня за розкладом
     cron.schedule(`${minute} ${hour} * * *`, async () => {
-      const currentDay = new Date().getDate();
+      const nextDay = new Date().getDate() + 1;
       if (!this.config.msgSentToday) {
         const sent = await this.sendMessage();
         this.config.msgSentToday = sent;
         this.saveConfig();
+        console.log(`${this.config.highlightStart}Наступне повідомлення: ${nextDay}, ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
       }
     });
     // Щодня опівночі скидаємо прапорець msgSentToday
@@ -87,7 +88,7 @@ class WhatsAppBot {
       this.saveConfig();
     });
     // this.showCountdown(hour, minute);
-    process.stdout.write(`${this.config.highlightStart}Наступне повідомлення о ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
+    console.log(`${this.config.highlightStart}Наступне повідомлення о ${this.config.highlightEnd} ${this.config.errorHighlightStart} ${hour}год. ${minute}хв.${this.config.errorHighlightEnd}`);
   }
 
   private async sendMessage(): Promise<boolean> {
