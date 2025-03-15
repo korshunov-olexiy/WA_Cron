@@ -74,7 +74,7 @@ class WhatsAppBot {
     const [hour, minute] = this.config.sendTime.split(':');
     // Запуск відправки щодня за розкладом
     cron.schedule(`${minute} ${hour} * * *`, async () => {
-      const nextDay = new Date().getDate() + 1;
+      const nextDay = new Date(new Date().getTime() + (1000 * 60 * 60 * 24));
       if (!this.config.msgSentToday) {
         const sent = await this.sendMessage();
         this.config.msgSentToday = sent;
