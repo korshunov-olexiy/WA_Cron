@@ -26,6 +26,14 @@ class WhatsAppBot {
     this.configPath = path.resolve(__dirname, configPath);
   }
 
+  private formattedTime(date: Date): string {
+    return date.toLocaleString('uk-UA', {
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
   private async readConfig(): Promise<Config> {
     const data = await fs.readFile(this.configPath, 'utf-8');
     return JSON.parse(data);
@@ -92,20 +100,11 @@ class WhatsAppBot {
     cron.schedule(`${minute} ${hour} * * *`, async () => {
       await this.sendMessage();
     });
-    const nextTime = new Date();
-    nextTime.setHours(Number(hour), Number(minute), 0, 0);
-    if (nextTime <= new Date()) nextTime.setDate(nextTime.getDate() + 1);
-    const formattedTime = nextTime.toLocaleString('uk-UA', {
-      weekday: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    console.log(`${this.config!.highlightStart}Відправка: ${this.config!.highlightEnd} ${formattedTime}`);
+    this.printNextSchedule(hour, minute);
   }
 
   private async sendMessage() {
     if (!this.sock) return;
-
     while (await this.isSentTime()) {
       try {
         const groups = await this.sock.groupFetchAllParticipating();
@@ -118,12 +117,26 @@ class WhatsAppBot {
         this.config!.msgSentToday = true;
         await this.saveConfig();
         console.log(`${this.config!.highlightStart}Відправлено у "${this.config!.group}".${this.config!.highlightEnd}`);
+        const [hour, minute] = this.config!.sendTime.split(':');
+        this.printNextSchedule(hour, minute);
         break;
       } catch (error) {
-        console.error(`${this.config!.errorHighlightStart}Помилка. Повтор через 15 сек...${this.config!.errorHighlightEnd}`);
+        console.error(`${this.config!.errorHighlightStart}Помилка відправки. Повторна спроба через 15 сек...${this.config!.errorHighlightEnd}`);
         await new Promise((resolve) => setTimeout(resolve, 15000));
       }
     }
+  }
+
+  private printNextSchedule(hour: string, minute: string) {
+    const nextTime = new Date();
+    nextTime.setHours(Number(hour), Number(minute), 0, 0);
+    if (nextTime <= new Date()) nextTime.setDate(nextTime.getDate() + 1);
+    const formattedTime = nextTime.toLocaleString('uk-UA', {
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    console.log(`${this.config!.highlightStart}Відправка: ${this.formattedTime(nextTime)}${this.config!.highlightEnd}`);
   }
 }
 
