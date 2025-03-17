@@ -100,7 +100,7 @@ class WhatsAppBot {
       hour: '2-digit',
       minute: '2-digit',
     });
-    console.log(`${this.config!.highlightStart}Наступне повідомлення буде відправлено: ${this.config!.highlightEnd} ${formattedTime}`);
+    console.log(`${this.config!.highlightStart}Відправка: ${this.config!.highlightEnd} ${formattedTime}`);
   }
 
   private async sendMessage() {
@@ -117,10 +117,10 @@ class WhatsAppBot {
         await this.sock.sendMessage(groupMetadata.id, { text: this.config!.message });
         this.config!.msgSentToday = true;
         await this.saveConfig();
-        console.log(`${this.config!.highlightStart}Повідомлення відправлене у "${this.config!.group}".${this.config!.highlightEnd}`);
+        console.log(`${this.config!.highlightStart}Відправлено у "${this.config!.group}".${this.config!.highlightEnd}`);
         break;
       } catch (error) {
-        console.error(`${this.config!.errorHighlightStart}Помилка відправки. Повторна спроба через 15 сек...${this.config!.errorHighlightEnd}`);
+        console.error(`${this.config!.errorHighlightStart}Помилка. Повтор через 15 сек...${this.config!.errorHighlightEnd}`);
         await new Promise((resolve) => setTimeout(resolve, 15000));
       }
     }
