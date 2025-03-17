@@ -1,7 +1,7 @@
 import { Boom } from '@hapi/boom';
 import makeWASocket, { Browsers, DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
-import * as fs from 'fs';
 import cron from 'node-cron';
+import * as fs from 'fs';
 import * as path from 'path';
 import pino from 'pino';
 
@@ -21,7 +21,6 @@ class WhatsAppBot {
   private sock: WASocket | null = null;
   private configPath: string;
   private config: Config;
-  private countdownInterval: NodeJS.Timeout | null = null;
 
   constructor(configPath: string) {
     this.configPath = path.resolve(__dirname, configPath);
@@ -30,7 +29,7 @@ class WhatsAppBot {
 
   private readConfig(): Config {
     if (!fs.existsSync(this.configPath)) {
-      throw new Error(`Файл конфігурації не знайдено.`);
+      throw new Error("Файл конфігурації не знайдено.");
     }
     return JSON.parse(fs.readFileSync(this.configPath, 'utf-8'));
   }
@@ -39,18 +38,20 @@ class WhatsAppBot {
     fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
   }
 
-  private compareTime(): boolean {
+  private isSentTime(): boolean {
     const [hour, minute] = this.config.sendTime.split(':').map(Number);
     const now = new Date();
-    const scheduledTime = new Date();
+    const scheduledTime = new Date(now);
     scheduledTime.setHours(hour, minute, 0, 0);
-    const toleranceMs = 10 * 60 * 1000;
-
-    return now.getTime() >= scheduledTime.getTime() - toleranceMs &&
-      now.getTime() <= scheduledTime.getTime() + toleranceMs;
+    this.config = this.readConfig();
+    return (
+      !this.config.msgSentToday &&
+      now >= scheduledTime &&
+      now <= new Date(scheduledTime.getTime() + 10 * 60000) // 10 хвилин
+    );
   }
 
-  async initialize() {
+  async initialize(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     this.sock = makeWASocket({
       auth: state,
@@ -59,101 +60,83 @@ class WhatsAppBot {
       printQRInTerminal: true,
       keepAliveIntervalMs: 60000,
     });
-
     this.sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
-
       if (qr) {
-        console.log(`${this.config.highlightStart}Відскануйте QR-код:${this.config.highlightEnd}\n`, qr);
+        console.log(`${this.config.highlightStart}Відскануйте QR-код для авторизації:${this.config.highlightEnd}\n`, qr);
       }
-
       if (connection === 'close') {
         const shouldReconnect =
           (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
         if (shouldReconnect) {
           await this.initialize();
         } else {
+          console.error(`${this.config.errorHighlightStart}Авторизацію не виконано. Завершення роботи.${this.config.errorHighlightEnd}`);
           process.exit(1);
         }
       } else if (connection === 'open') {
-        if (!this.config.msgSentToday && this.compareTime()) {
-          await this.sendMessage();
+        if (this.isSentTime()) {
+          await this.trySendMessage();
         }
         this.scheduleMessage();
       }
     });
-
     this.sock.ev.on('creds.update', saveCreds);
-
     cron.schedule('0 0 * * *', () => {
       this.config.msgSentToday = false;
       this.saveConfig();
     });
   }
 
-  private scheduleMessage() {
+  private scheduleMessage(): void {
     const [hour, minute] = this.config.sendTime.split(':');
-
     cron.schedule(`${minute} ${hour} * * *`, async () => {
-      await this.sendMessage();
+      await this.trySendMessage();
     });
-
-    this.showCountdown(parseInt(hour), parseInt(minute));
+    this.showCountdown(hour, minute);
   }
 
-  private async sendMessage() {
-    if (!this.sock) return;
-
-    const attemptSending = async () => {
-      if (!this.compareTime()) return false;
-
-      try {
-        const groups = await this.sock!.groupFetchAllParticipating();
-        const groupMetadata = Object.values(groups).find(group => group.subject === this.config.group);
-        if (!groupMetadata) {
-          console.error(`${this.config.errorHighlightStart}Група "${this.config.group}" не знайдена.${this.config.errorHighlightEnd}`);
-          return false;
-        }
-
-        await this.sock!.sendMessage(groupMetadata.id, { text: this.config.message });
+  private async trySendMessage(): Promise<void> {
+    while (this.isSentTime()) {
+      const sent = await this.sendMessage();
+      if (sent) {
         this.config.msgSentToday = true;
         this.saveConfig();
-
-        console.log(`\n${this.config.highlightStart}Повідомлення відправлене у "${this.config.group}".${this.config.highlightEnd}`);
-        return true;
-
-      } catch (error) {
-        console.error(`${this.config.errorHighlightStart}Помилка відправки. Повторна спроба через 30 сек.${this.config.errorHighlightEnd}`, error);
-        return false;
+        break;
       }
-    };
-
-    let sent = await attemptSending();
-
-    while (!sent && this.compareTime()) {
-      await new Promise(res => setTimeout(res => res(), 30000));
-      sent = await attemptSending();
+      await new Promise(r => setTimeout(r, 60000)); // повторити спробу через 1 хв.
     }
-
-    this.config.msgSentToday = sent;
-    this.saveConfig();
   }
 
-  private showCountdown(hour: number, minute: number) {
-    if (this.countdownInterval) clearInterval(this.countdownInterval);
+  private async sendMessage(): Promise<boolean> {
+    if (!this.sock) return false;
+    try {
+      const groups = await this.sock.groupFetchAllParticipating();
+      const groupMetadata = Object.values(groups).find(g => g.subject === this.config.group);
+      if (!groupMetadata) {
+        console.error(`${this.config.errorHighlightStart}Група "${this.config.group}" не знайдена.${this.config.errorHighlightEnd}`);
+        return false;
+      }
+      await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
+      console.log(`\n${this.config.highlightStart}Повідомлення відправлене у "${this.config.group}".${this.config.highlightEnd}`);
+      return true;
+    } catch (error) {
+      console.error(`${this.config.errorHighlightStart}Помилка при відправці:${this.config.errorHighlightEnd}`, error);
+      return false;
+    }
+  }
 
-    this.countdownInterval = setInterval(() => {
+  private showCountdown(hour: string, minute: string): void {
+    setInterval(() => {
       const now = new Date();
-      const target = new Date();
-      target.setHours(hour, minute, 0, 0);
-      if (target <= now) target.setDate(target.getDate() + 1);
-
-      const diff = target.getTime() - now.getTime();
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${h}год ${m}хв ${s}сек  `);
+      const next = new Date();
+      next.setHours(parseInt(hour), parseInt(minute), 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      const diffMs = next.getTime() - now.getTime();
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
+      const diffSeconds = Math.floor((diffMs % 60000) / 1000);
+      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${this.config.errorHighlightStart}${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}   `);
     }, 1000);
   }
 }
