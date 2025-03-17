@@ -131,11 +131,6 @@ class WhatsAppBot {
     const nextTime = new Date();
     nextTime.setHours(Number(hour), Number(minute), 0, 0);
     if (nextTime <= new Date()) nextTime.setDate(nextTime.getDate() + 1);
-    const formattedTime = nextTime.toLocaleString('uk-UA', {
-      weekday: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
     console.log(`${this.config!.highlightStart}Відправка: ${this.formattedTime(nextTime)}${this.config!.highlightEnd}`);
   }
 }
