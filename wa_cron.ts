@@ -100,8 +100,6 @@ class WhatsAppBot {
     while (this.isSentTime()) {
       const sent = await this.sendMessage();
       if (sent) {
-        this.config.msgSentToday = true;
-        this.saveConfig();
         break;
       }
       await new Promise(r => setTimeout(r, 60000)); // повторити спробу через 1 хв.
@@ -118,6 +116,8 @@ class WhatsAppBot {
         return false;
       }
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
+      this.config.msgSentToday = true;
+      this.saveConfig();
       console.log(`\n${this.config.highlightStart}Повідомлення відправлене у "${this.config.group}".${this.config.highlightEnd}`);
       return true;
     } catch (error) {
@@ -139,7 +139,7 @@ class WhatsAppBot {
       process.stdout.clearLine(0);
       process.stdout.cursorTo(0);
       process.stdout.write(`${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${this.config.errorHighlightStart}${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
-      // process.stdout.uncork();
+      process.stdout.uncork();
     }, 1000);
   }
 }
