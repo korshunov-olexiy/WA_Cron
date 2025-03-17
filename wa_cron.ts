@@ -24,16 +24,11 @@ class WhatsAppBot {
 
   constructor(configPath: string) {
     this.configPath = path.resolve(__dirname, configPath);
-    this.config = undefined;
   }
 
   private async readConfig(): Promise<Config> {
-    try {
-      const data = await fs.readFile(this.configPath, 'utf-8');
-      return JSON.parse(data);
-    } catch {
-      throw new Error("Файл конфігурації не знайдено або пошкоджено.");
-    }
+    const data = await fs.readFile(this.configPath, 'utf-8');
+    return JSON.parse(data);
   }
 
   private async saveConfig(): Promise<void> {
@@ -55,10 +50,11 @@ class WhatsAppBot {
 
   async initialize() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    this.config = await this.readConfig();
     this.sock = makeWASocket({
       auth: state,
       logger: pino({ level: 'silent' }),
-      browser: Browsers.baileys((await this.readConfig()).app_name),
+      browser: Browsers.baileys(this.config.app_name),
       printQRInTerminal: true,
       keepAliveIntervalMs: 60000,
     });
@@ -83,7 +79,6 @@ class WhatsAppBot {
         this.scheduleMessage();
       }
     });
-
     this.sock.ev.on('creds.update', saveCreds);
     cron.schedule('0 0 * * *', async () => {
       this.config = await this.readConfig();
@@ -97,11 +92,20 @@ class WhatsAppBot {
     cron.schedule(`${minute} ${hour} * * *`, async () => {
       await this.sendMessage();
     });
-    console.log(`Наступне повідомлення о ${hour}:${minute}`);
+    const nextTime = new Date();
+    nextTime.setHours(Number(hour), Number(minute), 0, 0);
+    if (nextTime <= new Date()) nextTime.setDate(nextTime.getDate() + 1);
+    const formattedTime = nextTime.toLocaleString('uk-UA', {
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    console.log(`${this.config!.highlightStart}Наступне повідомлення буде відправлено: ${this.config!.highlightEnd} ${formattedTime}`);
   }
 
   private async sendMessage() {
     if (!this.sock) return;
+
     while (await this.isSentTime()) {
       try {
         const groups = await this.sock.groupFetchAllParticipating();
@@ -113,30 +117,14 @@ class WhatsAppBot {
         await this.sock.sendMessage(groupMetadata.id, { text: this.config!.message });
         this.config!.msgSentToday = true;
         await this.saveConfig();
-        console.log(`\n${this.config!.highlightStart}Повідомлення відправлене у "${this.config!.group}".${this.config!.highlightEnd}`);
+        console.log(`${this.config!.highlightStart}Повідомлення відправлене у "${this.config!.group}".${this.config!.highlightEnd}`);
         break;
       } catch (error) {
-        console.error(`${this.config!.errorHighlightStart}Помилка відправки. Повторна спроба...${this.config!.errorHighlightEnd}`);
-        await new Promise((resolve) => setTimeout(resolve, 15000)); // пауза перед повторною спробою
+        console.error(`${this.config!.errorHighlightStart}Помилка відправки. Повторна спроба через 15 сек...${this.config!.errorHighlightEnd}`);
+        await new Promise((resolve) => setTimeout(resolve, 15000));
       }
     }
   }
-
-  /*private showCountdown(hour: string, minute: string) {
-    setInterval(() => {
-      const now = new Date();
-      const next = new Date();
-      next.setHours(parseInt(hour), parseInt(minute), 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      const diffMs = next.getTime() - now.getTime();
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
-      const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.clearLine(0);
-      process.stdout.cursorTo(0);
-      process.stdout.write(`${this.config!.highlightStart}Наступне повідомлення через:${this.config!.highlightEnd}${this.config!.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config!.errorHighlightEnd}`);
-    }, 1000);
-  }*/
 }
 
 const bot = new WhatsAppBot('./config.json');
