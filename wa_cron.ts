@@ -136,7 +136,10 @@ class WhatsAppBot {
       const diffHours = Math.floor(diffMs / 3600000);
       const diffMinutes = Math.floor((diffMs % 3600000) / 60000);
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
-      process.stdout.write(`\r${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${this.config.errorHighlightStart}${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}   `);
+      process.stdout.clearLine(0);
+      process.stdout.cursorTo(0);
+      process.stdout.write(`${this.config.highlightStart}Наступне повідомлення через:${this.config.highlightEnd} ${this.config.errorHighlightStart}${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config.errorHighlightEnd}`);
+      // process.stdout.uncork();
     }, 1000);
   }
 }
