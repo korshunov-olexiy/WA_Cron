@@ -97,7 +97,7 @@ class WhatsAppBot {
     cron.schedule(`${minute} ${hour} * * *`, async () => {
       await this.sendMessage();
     });
-    this.showCountdown(hour, minute);
+    console.log(`Наступне повідомлення о ${hour}:${minute}`);
   }
 
   private async sendMessage() {
@@ -122,7 +122,7 @@ class WhatsAppBot {
     }
   }
 
-  private showCountdown(hour: string, minute: string) {
+  /*private showCountdown(hour: string, minute: string) {
     setInterval(() => {
       const now = new Date();
       const next = new Date();
@@ -136,7 +136,7 @@ class WhatsAppBot {
       process.stdout.cursorTo(0);
       process.stdout.write(`${this.config!.highlightStart}Наступне повідомлення через:${this.config!.highlightEnd}${this.config!.errorHighlightStart} ${diffHours}год. ${diffMinutes}хв. ${diffSeconds}сек.${this.config!.errorHighlightEnd}`);
     }, 1000);
-  }
+  }*/
 }
 
 const bot = new WhatsAppBot('./config.json');
