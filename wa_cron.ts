@@ -49,7 +49,6 @@ class WhatsAppBot {
     const currentDate = new Date();
     const scheduledTime = new Date(currentDate);
     scheduledTime.setHours(hour, minute, 0, 0);
-
     return (
       !this.config.msgSentToday &&
       currentDate >= scheduledTime &&
@@ -92,14 +91,7 @@ class WhatsAppBot {
             await new Promise((res) => setTimeout(res, 15000));
           }
         }
-        while (await this.isSentTime()) {
-          try {
-            this.scheduleMessage();
-          } catch (error) {
-            console.error(`${this.config.errorHighlightStart}Помилка відправки: повтор через 15 сек.${this.config.errorHighlightEnd}`);
-            await new Promise((res) => setTimeout(res, 15000));
-          }
-        }
+        this.scheduleMessage();
       }
     });
     // скидаємо прапорець в 00:00
@@ -111,10 +103,29 @@ class WhatsAppBot {
     });
   }
 
-  private scheduleMessage() {
+  /*private scheduleMessage() {
     const [hour, minute] = this.config.sendTime.split(':');
     cron.schedule(`${minute} ${hour} * * *`, () => {
       this.sendMessage();
+    });
+    this.printNextSchedule(hour, minute);
+  }*/
+
+  private scheduleMessage() {
+    const [hour, minute] = this.config.sendTime.split(':');
+    cron.schedule(`${minute} ${hour} * * *`, async () => {
+      console.log(`${this.config.highlightStart}Настав час відправки повідомлення.${this.config.highlightEnd}`);
+      while (await this.isSentTime()) {
+        try {
+          const sent = await this.sendMessage();
+          if (sent) {
+            break; // якщо повідомлення успішно відправлено, виходимо з циклу
+          }
+        } catch (error) {
+          console.error(`${this.config.errorHighlightStart}Помилка відправки, повтор через 15 секунд...${this.config.errorHighlightEnd}`);
+          await new Promise((res) => setTimeout(res, 15000)); // чекаємо 15 секунд перед повторною спробою
+        }
+      }
     });
     this.printNextSchedule(hour, minute);
   }
