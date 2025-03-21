@@ -20,7 +20,7 @@ class WhatsAppBot {
   private sock: WASocket | null = null;
   private configPath: string;
   private config!: Config;
-  private msgSentToday: boolean|null = false;
+  private msgSentToday: boolean = false;
 
   constructor(configPath: string) {
     this.configPath = path.resolve(__dirname, configPath);
