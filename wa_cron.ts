@@ -71,19 +71,19 @@ class WhatsAppBot {
         const shouldReconnect =
           (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
         if (shouldReconnect) {
-          console.log(`${this.config.errorHighlightStart}З'єднання втрачено. Перепідключення...${this.config.errorHighlightEnd}`);
+          // console.log(`${this.config.errorHighlightStart}Перепідключення...${this.config.errorHighlightEnd}`);
           await this.initialize();
         } else {
           console.error(`${this.config.errorHighlightStart}Авторизацію не виконано. Вихід.${this.config.errorHighlightEnd}`);
           process.exit(1);
         }
       } else if (connection === 'open') {
-        console.log(`${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
+        // console.log(`${this.config.highlightStart}Підключено до WhatsApp.${this.config.highlightEnd}`);
         while (await this.isSentTime()) {
           try {
             await this.sendMessage();
           } catch (error) {
-            console.error(`${this.config.errorHighlightStart}Помилка відправки: повтор через 15 сек.${this.config.errorHighlightEnd}`);
+            console.error(`${this.config.errorHighlightStart}Помилка. відправки через 15 сек.${this.config.errorHighlightEnd}`);
             await new Promise((res) => setTimeout(res, 15000));
           }
         }
@@ -101,7 +101,7 @@ class WhatsAppBot {
   private scheduleMessage() {
     const [hour, minute] = this.config.sendTime.split(':');
     cron.schedule(`${minute} ${hour} * * *`, async () => {
-      console.log(`${this.config.highlightStart}Настав час відправки повідомлення.${this.config.highlightEnd}`);
+      //console.log(`${this.config.highlightStart}Настав час відправки повідомлення.${this.config.highlightEnd}`);
       while (await this.isSentTime()) {
         try {
           const sent = await this.sendMessage();
@@ -110,7 +110,7 @@ class WhatsAppBot {
             break; // якщо повідомлення успішно відправлено, виходимо з циклу
           }
         } catch (error) {
-          console.error(`${this.config.errorHighlightStart}Помилка відправки, повтор через 15 секунд...${this.config.errorHighlightEnd}`);
+          console.error(`${this.config.errorHighlightStart}Помилка, відправка через 15 секунд...${this.config.errorHighlightEnd}`);
           await new Promise((res) => setTimeout(res, 15000)); // чекаємо 15 секунд перед повторною спробою
         }
       }
