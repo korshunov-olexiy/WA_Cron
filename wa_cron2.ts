@@ -14,13 +14,13 @@ interface Config {
   highlightEnd: string;
   errorHighlightStart: string;
   errorHighlightEnd: string;
+  msgSentToday: boolean;
 }
 
 class WhatsAppBot {
   private sock: WASocket | null = null;
   private configPath: string;
   private config!: Config;
-  private msgSentToday: boolean|null = false;
 
   constructor(configPath: string) {
     this.configPath = path.resolve(__dirname, configPath);
@@ -39,6 +39,10 @@ class WhatsAppBot {
     return JSON.parse(data);
   }
 
+  private async saveConfig(): Promise<void> {
+    await fs.writeFile(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
+  }
+
   private async isSentTime(): Promise<boolean> {
     this.config = await this.readConfig();
     const [hour, minute] = this.config.sendTime.split(':').map(Number);
@@ -46,7 +50,7 @@ class WhatsAppBot {
     const scheduledTime = new Date(currentDate);
     scheduledTime.setHours(hour, minute, 0, 0);
     return (
-      !this.msgSentToday &&
+      !this.config.msgSentToday &&
       currentDate >= scheduledTime &&
       currentDate <= new Date(scheduledTime.getTime() + 10 * 60000)
     );
@@ -94,7 +98,8 @@ class WhatsAppBot {
     this.sock.ev.on('creds.update', saveCreds);
     cron.schedule('0 0 * * *', async () => {
       this.config = await this.readConfig();
-      this.msgSentToday = false;
+      this.config.msgSentToday = false;
+      await this.saveConfig();
     });
   }
 
@@ -105,7 +110,6 @@ class WhatsAppBot {
       while (await this.isSentTime()) {
         try {
           const sent = await this.sendMessage();
-          await new Promise((res) => setTimeout(res, 1000));
           if (sent) {
             break; // якщо повідомлення успішно відправлено, виходимо з циклу
           }
@@ -129,7 +133,8 @@ class WhatsAppBot {
           return process.exit(1);
         }
         await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
-        this.msgSentToday = true;
+        this.config.msgSentToday = true;
+        await this.saveConfig();
         console.log(`${this.config.highlightStart}Відправлено у "${this.config.group}".${this.config.highlightEnd}`);
         const [hour, minute] = this.config.sendTime.split(':');
         this.printNextSchedule(hour, minute);
