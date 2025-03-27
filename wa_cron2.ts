@@ -32,9 +32,9 @@ class WhatsAppBot {
       }
     });
 
-    this.sock.ev.on('messages.upsert', (m) => {
-      console.log('Отримано повідомлення:', m);
-    });
+    // this.sock.ev.on('messages.upsert', (m) => {
+    //   console.log('Отримано повідомлення:', m);
+    // });
 
     this.scheduleSendMessage();
   }
