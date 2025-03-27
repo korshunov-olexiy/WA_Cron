@@ -1,11 +1,11 @@
-import { Boom } from '@hapi/boom';
-import makeWASocket, { DisconnectReason, Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
-import cron from 'node-cron';
+import makeWASocket, { Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import * as fs from 'fs/promises';
+import cron from 'node-cron';
 import * as path from 'path';
 import pino from 'pino';
 
 interface Config {
+  app_name: string;
   group: string;     // ім'я групи
   message: string;   // текст повідомлення
   sendTime: string;  // час, коли треба відправити повідомлення
@@ -21,7 +21,7 @@ class WhatsAppBot {
     this.sock = makeWASocket({
       auth: state,
       logger: pino({ level: 'silent' }),
-      browser: Browsers.baileys('My WhatsApp Bot'),
+      browser: Browsers.baileys(this.config.app_name),
       printQRInTerminal: true,
       keepAliveIntervalMs: 60000,
     });
@@ -58,7 +58,6 @@ class WhatsAppBot {
       console.error(`Група "${this.config.group}" не знайдена.`);
       return;
     }
-
     try {
       await this.sock!.sendMessage(groupMetadata.id, { text: this.config.message });
       console.log(`Повідомлення відправлено в групу "${this.config.group}"`);

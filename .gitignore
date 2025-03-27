@@ -14,6 +14,8 @@ config.json
 tsconfig.json
 auth_info/
 *.bck
+update_app.cmd
+
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
