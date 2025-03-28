@@ -168,5 +168,5 @@ cron.schedule(cronExpression, async () => {
     }
   }, 30000);
 }, {
-  timezone: 'UTC'
+  timezone: 'Europe/Kyiv'
 });
