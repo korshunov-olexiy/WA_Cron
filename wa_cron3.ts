@@ -70,7 +70,7 @@ async function connectToWhatsApp() {
       const { connection, lastDisconnect } = update;
       if (connection === 'open') {
         isConnected = true;
-        console.log('✅ WhatsApp connection opened');
+        console.log('✅ З\'єднання з WhatsApp успішне');
         // Отримуємо ID групи за назвою (якщо ще не визначено)
         if (!targetJid && config.groupName) {
           try {
