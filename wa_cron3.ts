@@ -1,11 +1,9 @@
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import cron from 'node-cron';
-import makeWASocket, { Browsers, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
-import pino from 'pino';
 
-// Глобальні обробники необроблених помилок – щоб процес не завершувався
 process.on('uncaughtException', (err) => {
   console.error('Unhandled Exception:', err);
 });
@@ -13,13 +11,11 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
 });
 
-// Читаємо конфігурацію
 interface Config {
-  app_name: string;
   groupName: string;
   messageText: string;
-  sendTime: string;        // час відправки, формат "HH:MM" або cron-вираз
-  alertSoundFile?: string; // шлях до звукового файлу для оповіщення (mp3)
+  sendTime: string;
+  alertSoundFile?: string;
 }
 let config: Config;
 try {
@@ -27,51 +23,41 @@ try {
   config = JSON.parse(configData) as Config;
 } catch (e) {
   console.error('Failed to load config.json:', e);
-  config = { app_name: '', groupName: '', messageText: '', sendTime: '' }; // продовжимо роботу, хоча відправка неможлива
+  config = { groupName: '', messageText: '', sendTime: '' };
 }
 
-// Підготовка cron-виразу для щоденного запуску
 let cronExpression: string;
-const [h, m] = config.sendTime.split(':');
-cronExpression = `0 ${m} ${h} * * *`;  // `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
+if (config.sendTime && /^\d{1,2}:\d{2}$/.test(config.sendTime)) {
+  const [h, m] = config.sendTime.split(':');
+  cronExpression = `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
+} else {
+  cronExpression = config.sendTime || '0 9 * * *';
+}
 
-// Глобальні змінні для стану
-let sock: any;                  // сокет Baileys
+let sock: any;
 let isConnected: boolean = false;
-let targetJid: string | undefined; 
+let targetJid: string | undefined;
 let lastSentDate: string | null = null;
 
-// Завантажуємо дату останньої відправки з файлу (якщо є)
 try {
   const lastData = fs.readFileSync('last_sent.json', 'utf-8');
   const obj = JSON.parse(lastData);
-  if (obj && obj.lastSent) {
-    lastSentDate = obj.lastSent;
-  }
-} catch (e) {
-  // файл може не існувати - це не критична помилка
-  lastSentDate = null;
-}
+  if (obj && obj.lastSent) lastSentDate = obj.lastSent;
+} catch {}
 
-// Функція підключення до WhatsApp
 async function connectToWhatsApp() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     sock = makeWASocket({
       auth: state,
-      logger: pino({level: 'silent'}),
-      browser: Browsers.baileys(config.app_name),
       printQRInTerminal: true
     });
     sock.ev.on('creds.update', saveCreds);
-
-    // Обробник подій підключення/відключення
     sock.ev.on('connection.update', async (update: any) => {
       const { connection, lastDisconnect } = update;
       if (connection === 'open') {
         isConnected = true;
-        console.log('✅ З\'єднання з WhatsApp успішне');
-        // Отримуємо ID групи за назвою (якщо ще не визначено)
+        console.log('✅ WhatsApp connected');
         if (!targetJid && config.groupName) {
           try {
             const groups = await sock.groupFetchAllParticipating();
@@ -81,43 +67,31 @@ async function connectToWhatsApp() {
                 break;
               }
             }
-            if (targetJid) {
-              console.log(`Цільова група: "${config.groupName}" знайдена: ${targetJid}`);
-            } else {
-              console.error(`⚠️ Група "${config.groupName}" не знайдена. Перевірте налаштування.`);
-            }
+            if (targetJid) console.log(`Target group found: ${targetJid}`);
+            else console.error(`Group "${config.groupName}" not found`);
           } catch (err) {
-            console.error('Помилка отримання списку груп:', err);
+            console.error('Failed to fetch groups:', err);
           }
         }
       } else if (connection === 'close') {
         isConnected = false;
         const error = lastDisconnect?.error;
         const shouldReconnect = (error instanceof Boom ? error.output.statusCode : 0) !== DisconnectReason.loggedOut;
-        console.warn('Connection closed. Reason:', error?.message || error, '| Reconnect:', shouldReconnect);
+        console.warn('Connection closed. Reason:', error?.message || error);
         if (shouldReconnect) {
-          // спробувати перепідключитися
-          connectToWhatsApp().catch(err => {
-            console.error('Reconnect attempt failed:', err);
-          });
+          connectToWhatsApp().catch(err => console.error('Reconnect failed:', err));
         } else {
-          console.log('Logged out from WhatsApp. Reconnection not attempted.');
+          console.log('Logged out. No reconnection.');
         }
       }
     });
-
-    // **Вхідні повідомлення не обробляються**, тому обробник sock.ev.on('messages.upsert') тут не потрібен.
   } catch (err) {
-    console.error('Помилка підключення до WhatsApp:', err);
+    console.error('connectToWhatsApp error:', err);
   }
 }
 
-// Запускаємо початкове підключення
-connectToWhatsApp().catch(err => {
-  console.error('Помилка підключення:', err);
-});
+connectToWhatsApp().catch(err => console.error('Initial connection error:', err));
 
-// Функція для запису інформації про останню відправку
 function updateLastSentToday() {
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -128,13 +102,11 @@ function updateLastSentToday() {
   try {
     fs.writeFileSync('last_sent.json', data);
   } catch (e) {
-    console.error('Помилка запису в last_sent.json:', e);
+    console.error('Failed to write last_sent.json:', e);
   }
 }
 
-// Розклад щоденного відправлення повідомлення
 cron.schedule(cronExpression, async () => {
-  // Переконуємося, що повідомлення цього дня ще не надсилалось
   const todayStr = (() => {
     const d = new Date();
     const yy = d.getFullYear();
@@ -143,75 +115,58 @@ cron.schedule(cronExpression, async () => {
     return `${yy}-${m}-${dd}`;
   })();
   if (lastSentDate === todayStr) {
-    console.log('Повідомлення вже було відправлене сьогодні');
-    return; // уникнути повторної відправки в той самий день
+    console.log('Already sent today.');
+    return;
   }
 
-  // Готуємо дані повідомлення
   const messageContent = { text: config.messageText || '' };
-  const destinationJid = targetJid;
-
-  // Спроба надіслати з повторними спробами у разі невдачі
   let sent = false;
   let attempts = 0;
-  const maxAttempts = 10; // ~5 хв при інтервалі 30 сек
-  console.log(`⏰ Запланована відправка на ${todayStr} ${config.sendTime}`);
+  const maxAttempts = 10;
+
+  console.log(`⏰ Scheduled send triggered at ${todayStr} ${config.sendTime}`);
+
   const intervalId = setInterval(async () => {
     attempts++;
     try {
-      if (isConnected && destinationJid) {
-        // Якщо раптом targetJid досі не визначено (destinationJid undefined), спробуємо ще раз отримати
-        if (!destinationJid) {
-          try {
-            const groups = await sock.groupFetchAllParticipating();
-            for (const [jid, groupInfo] of Object.entries(groups)) {
-              if ((groupInfo as any).subject === config.groupName) {
-                targetJid = jid;
-                break;
-              }
+      let destinationJid = targetJid;
+      if (!destinationJid && isConnected) {
+        try {
+          const groups = await sock.groupFetchAllParticipating();
+          for (const [jid, groupInfo] of Object.entries(groups)) {
+            if ((groupInfo as any).subject === config.groupName) {
+              destinationJid = jid;
+              targetJid = jid;
+              break;
             }
-          } catch (err) {
-            console.error('Group fetch failed during send attempts:', err);
           }
-        }
-        if (targetJid) {
-          // Надсилаємо повідомлення
-          await sock.sendMessage(targetJid, messageContent);
-          console.log('✔️ Повідомлення успішно відправлене.');
-          sent = true;
-          // Оновлюємо лог останньої відправки
-          updateLastSentToday();
-        } else {
-          console.error('Відправка не можлива: цільова група не визначена.');
-          // Якщо групу не знайдено, подальші спроби безглузді
-          clearInterval(intervalId);
+        } catch (err) {
+          console.error('Group fetch failed:', err);
         }
       }
-      if (sent) {
-        clearInterval(intervalId);
-        return; // успішно надіслано, виходимо з інтервалу
+
+      if (isConnected && destinationJid) {
+        await sock.sendMessage(destinationJid, messageContent);
+        console.log('✔️ Message sent.');
+        sent = true;
+        updateLastSentToday();
       }
-      if (attempts >= maxAttempts) {
-        // Вичерпано 5 хвилин спроб
+
+      if (sent) clearInterval(intervalId);
+      if (attempts >= maxAttempts && !sent) {
         clearInterval(intervalId);
-        console.error('❌ Не вдалося надіслати повідомлення протягом 5 хв. після запланованого часу.');
-        // Відтворюємо звуковий сигнал тривоги (якщо вказано файл звуку)
+        console.error('❌ Failed to send after 5 minutes.');
         if (config.alertSoundFile) {
-          exec(`play-audio "${config.alertSoundFile}"`, (err) => {
-            if (err) {
-              console.error('Помилка відтворення звуку:', err);
-            } else {
-              console.log('🔔 Відтворений звук помилки відправки повідомлення.');
-            }
+          exec(`termux-media-player play "${config.alertSoundFile}"`, (err) => {
+            if (err) console.error('Sound playback failed:', err);
+            else console.log('🔔 Sound played.');
           });
         }
-        // Повідомлення пропущено до наступного дня (lastSentDate не оновлюємо)
       }
     } catch (err) {
-      // Обробка будь-яких помилок при відправленні
-      console.error('Виникла помилка під час відправки повідомлення:', err);
+      console.error('Send attempt error:', err);
     }
-  }, 30000); // інтервал повторних спроб ~30 секунд
+  }, 30000);
 }, {
-  timezone: 'Europe/Kyiv'
+  timezone: 'UTC'
 });
