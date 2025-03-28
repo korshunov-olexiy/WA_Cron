@@ -42,8 +42,8 @@ class WhatsAppBot {
   }
 
   private scheduleSendMessage() {
-    const cronExpression = `0 ${this.config.sendTime.split(':')[1]} ${this.config.sendTime.split(':')[0]} * * *`;
-    cron.schedule(cronExpression, async () => {
+    const [hour, minute] = this.config.sendTime.split(':');
+    cron.schedule(`0 ${minute} ${hour} * * *`, async () => {
       await this.sendMessage();
     });
   }
