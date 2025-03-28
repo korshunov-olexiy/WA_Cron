@@ -5,7 +5,7 @@ import * as path from 'path';
 import pino from 'pino';
 
 interface Config {
-  app_name: string;
+  app_name: string;  // ім'я програми
   group: string;     // ім'я групи
   message: string;   // текст повідомлення
   sendTime: string;  // час, коли треба відправити повідомлення
@@ -14,6 +14,7 @@ interface Config {
 class WhatsAppBot {
   private sock: WASocket | null = null;
   private config!: Config;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
 
   async init() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -25,17 +26,13 @@ class WhatsAppBot {
       printQRInTerminal: true,
       keepAliveIntervalMs: 60000,
     });
-
     this.sock.ev.on('connection.update', (update) => {
       if (update.qr) {
         console.log('QR код:', update.qr);
+      } else if (update.connection === 'close') {
+        this.reconnect();
       }
     });
-
-    // this.sock.ev.on('messages.upsert', (m) => {
-    //   console.log('Отримано повідомлення:', m);
-    // });
-
     this.scheduleSendMessage();
   }
 
@@ -51,15 +48,33 @@ class WhatsAppBot {
     });
   }
 
+  private async reconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+    this.reconnectTimeout = setTimeout(async () => {
+      try {
+        await this.init();
+      } catch (error) {
+        console.error('Помилка при перепідключенні:', error);
+        this.reconnect();
+      }
+    }, 30000); // перепідключення через 30 секунд
+  }
+
   private async sendMessage() {
-    const groups = await this.sock!.groupFetchAllParticipating();
-    const groupMetadata = Object.values(groups).find((group) => group.subject === this.config.group);
-    if (!groupMetadata) {
-      console.error(`Група "${this.config.group}" не знайдена.`);
+    if (!this.sock) {
+      console.error('З\'єднання не встановлено.');
       return;
     }
     try {
-      await this.sock!.sendMessage(groupMetadata.id, { text: this.config.message });
+      const groups = await this.sock.groupFetchAllParticipating();
+      const groupMetadata = Object.values(groups).find((group) => group.subject === this.config.group);
+      if (!groupMetadata) {
+        console.error(`Група "${this.config.group}" не знайдена.`);
+        return;
+      }
+      await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
       console.log(`Повідомлення відправлено в групу "${this.config.group}"`);
     } catch (error) {
       console.error('Помилка при відправці повідомлення:', error);
