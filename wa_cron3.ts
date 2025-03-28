@@ -197,7 +197,7 @@ cron.schedule(cronExpression, async () => {
         console.error('❌ Не вдалося надіслати повідомлення протягом 5 хв. після запланованого часу.');
         // Відтворюємо звуковий сигнал тривоги (якщо вказано файл звуку)
         if (config.alertSoundFile) {
-          exec(`termux-media-player play "${config.alertSoundFile}"`, (err) => {
+          exec(`play-audio "${config.alertSoundFile}"`, (err) => {
             if (err) {
               console.error('Помилка відтворення звуку:', err);
             } else {
