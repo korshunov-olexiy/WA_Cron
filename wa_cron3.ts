@@ -33,7 +33,7 @@ try {
 // Підготовка cron-виразу для щоденного запуску
 let cronExpression: string;
 const [h, m] = config.sendTime.split(':');
-cronExpression = `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
+cronExpression = `0 ${m} ${h} * * *`;  // `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
 
 // Глобальні змінні для стану
 let sock: any;                  // сокет Baileys
