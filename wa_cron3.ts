@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import cron from 'node-cron';
 import * as path from 'path';
 import pino from 'pino';
+import { Transform } from 'stream';
 
 interface Config {
   app_name: string;
@@ -12,6 +13,22 @@ interface Config {
   sendTime: string;
   alertSoundFile: string;
 }
+
+// Створюємо кастомний трансформ-стрім для фільтрації повідомлень
+const filterStream = new Transform({
+  transform(chunk, encoding, callback) {
+    const message = chunk.toString();
+    if (message.includes("Decrypted message with closed session.")) {
+      // Ігноруємо це повідомлення
+      callback();
+    } else {
+      callback(null, chunk);
+    }
+  }
+});
+
+// Налаштовуємо логер із потрібним рівнем і нашим фільтром
+const logger = pino({ level: 'debug' }, filterStream);
 
 class MyWABot {
   config!: Config;
@@ -45,7 +62,7 @@ class MyWABot {
     try {
       this.sock = makeWASocket({
         auth: this.authState,
-        logger: pino({ level: 'silent' }),
+        logger: logger,
         browser: Browsers.baileys(this.config.app_name),
         printQRInTerminal: true,
         keepAliveIntervalMs: 60000,
@@ -71,7 +88,7 @@ class MyWABot {
     const [hour, minute] = this.config.sendTime.split(':');
     const cronExpression = `${minute} ${hour} * * *`;
     cron.schedule(cronExpression, () => {
-      console.log(`⏰Запланована відправка о ${this.config.sendTime}.`);
+      console.log(`⏰Відправка о ${this.config.sendTime}.`);
       this.sendMessageWithRetries();
     });
   }
