@@ -12,6 +12,7 @@ interface Config {
   message: string;
   sendTime: string;
   alertSoundFile: string;
+  successSoundFile: string;
 }
 
 // Створюємо кастомний трансформ-стрім для фільтрації повідомлень
@@ -106,7 +107,7 @@ class MyWABot {
         await this.delay(30000);
       }
     }
-    if (!sent) this.playErrorSound();
+    if (!sent) this.playErrorSound(this.config.alertSoundFile);
   }
 
   async sendMessage(): Promise<boolean> {
@@ -117,6 +118,7 @@ class MyWABot {
       if (!groupMetadata) throw new Error('🔍👭Групу не знайдено');
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
       console.log('📩Повідомлення відправлено');
+      this.playErrorSound(this.config.successSoundFile);
       return true;
     } catch (error) {
       console.error('❌Не вдалося відправити повідомлення:', error);
@@ -128,8 +130,8 @@ class MyWABot {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  playErrorSound() {
-    exec(`player-audio ${this.config.alertSoundFile}`, (error) => {
+  playErrorSound(sound_file: string) {
+    exec(`player-audio ${sound_file}`, (error) => {
       if (error) console.error('🔕Помилка при відтворенні звуку:', error);
     });
   }
