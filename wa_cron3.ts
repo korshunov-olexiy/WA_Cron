@@ -131,7 +131,7 @@ class MyWABot {
   }
 
   playErrorSound(sound_file: string) {
-    exec(`player-audio ${sound_file}`, (error) => {
+    exec(`play-audio ${sound_file}`, (error) => {
       if (error) console.error('🔕Помилка при відтворенні звуку:', error);
     });
   }
