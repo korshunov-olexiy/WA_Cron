@@ -45,7 +45,7 @@ class MyWABot {
       await this.connect();
       this.setupListeners();
       this.scheduleDailyMessage();
-      console.log(`📅 Програма запущена. Повідомлення буде відправлено щодня о ${this.config.sendTime}.`);
+      console.log(`📅 Повідомлення будуть відправлятись  щодня о ${this.config.sendTime} в групу ${this.config.group}.`);
     } catch (error) {
       console.error('Помилка ініціалізації:', error);
       setTimeout(() => this.init(), 5000);
@@ -73,13 +73,13 @@ class MyWABot {
         if (connection === 'close') {
           const error = lastDisconnect?.error as any;
           if (error?.output?.statusCode !== 401) {
-            console.log('З\'єднання втрачено. Спроба перепідключення...');
+            // console.log('З\'єднання втрачено. Спроба перепідключення...');
             await this.connect();
           }
         }
       });
     } catch (error) {
-      console.error('Помилка підключення:', error);
+      console.error('❌Помилка підключення:', error);
       setTimeout(() => this.connect(), 5000);
     }
   }
