@@ -1,172 +1,126 @@
-import * as fs from 'fs';
+import makeWASocket, { Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import { exec } from 'child_process';
+import * as fs from 'fs/promises';
 import cron from 'node-cron';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
-
-process.on('uncaughtException', (err) => {
-  console.error('Unhandled Exception:', err);
-});
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-});
+import * as path from 'path';
+import pino from 'pino';
 
 interface Config {
-  groupName: string;
-  messageText: string;
+  app_name: string;
+  group: string;
+  message: string;
   sendTime: string;
-  alertSoundFile?: string;
-}
-let config: Config;
-try {
-  const configData = fs.readFileSync('config.json', 'utf-8');
-  config = JSON.parse(configData) as Config;
-} catch (e) {
-  console.error('Failed to load config.json:', e);
-  config = { groupName: '', messageText: '', sendTime: '' };
+  alertSoundFile: string;
 }
 
-let cronExpression: string;
-if (config.sendTime && /^\d{1,2}:\d{2}$/.test(config.sendTime)) {
-  const [h, m] = config.sendTime.split(':');
-  cronExpression = `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
-} else {
-  cronExpression = config.sendTime || '0 9 * * *';
-}
+class MyWABot {
+  config!: Config;
+  sock: WASocket | null = null;
+  authState: any = null;
+  saveCreds: (() => Promise<void>) | null = null;
 
-let sock: any;
-let isConnected: boolean = false;
-let targetJid: string | undefined;
-let lastSentDate: string | null = null;
-
-try {
-  const lastData = fs.readFileSync('last_sent.json', 'utf-8');
-  const obj = JSON.parse(lastData);
-  if (obj && obj.lastSent) lastSentDate = obj.lastSent;
-} catch {}
-
-async function connectToWhatsApp() {
-  try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-    sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: true
-    });
-    sock.ev.on('creds.update', saveCreds);
-    sock.ev.on('connection.update', async (update: any) => {
-      const { connection, lastDisconnect } = update;
-      if (connection === 'open') {
-        isConnected = true;
-        console.log('✅ WhatsApp connected');
-        if (!targetJid && config.groupName) {
-          try {
-            const groups = await sock.groupFetchAllParticipating();
-            for (const [jid, groupInfo] of Object.entries(groups)) {
-              if ((groupInfo as any).subject === config.groupName) {
-                targetJid = jid;
-                break;
-              }
-            }
-            if (targetJid) console.log(`Target group found: ${targetJid}`);
-            else console.error(`Group "${config.groupName}" not found`);
-          } catch (err) {
-            console.error('Failed to fetch groups:', err);
-          }
-        }
-      } else if (connection === 'close') {
-        isConnected = false;
-        const error = lastDisconnect?.error;
-        const shouldReconnect = (error instanceof Boom ? error.output.statusCode : 0) !== DisconnectReason.loggedOut;
-        console.warn('Connection closed. Reason:', error?.message || error);
-        if (shouldReconnect) {
-          connectToWhatsApp().catch(err => console.error('Reconnect failed:', err));
-        } else {
-          console.log('Logged out. No reconnection.');
-        }
-      }
-    });
-  } catch (err) {
-    console.error('connectToWhatsApp error:', err);
-  }
-}
-
-connectToWhatsApp().catch(err => console.error('Initial connection error:', err));
-
-function updateLastSentToday() {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  lastSentDate = `${yyyy}-${mm}-${dd}`;
-  const data = JSON.stringify({ lastSent: lastSentDate });
-  try {
-    fs.writeFileSync('last_sent.json', data);
-  } catch (e) {
-    console.error('Failed to write last_sent.json:', e);
-  }
-}
-
-cron.schedule(cronExpression, async () => {
-  const todayStr = (() => {
-    const d = new Date();
-    const yy = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yy}-${m}-${dd}`;
-  })();
-  if (lastSentDate === todayStr) {
-    console.log('Already sent today.');
-    return;
-  }
-
-  const messageContent = { text: config.messageText || '' };
-  let sent = false;
-  let attempts = 0;
-  const maxAttempts = 10;
-
-  console.log(`⏰ Scheduled send triggered at ${todayStr} ${config.sendTime}`);
-
-  const intervalId = setInterval(async () => {
-    attempts++;
+  async init() {
     try {
-      let destinationJid = targetJid;
-      if (!destinationJid && isConnected) {
-        try {
-          const groups = await sock.groupFetchAllParticipating();
-          for (const [jid, groupInfo] of Object.entries(groups)) {
-            if ((groupInfo as any).subject === config.groupName) {
-              destinationJid = jid;
-              targetJid = jid;
-              break;
-            }
-          }
-        } catch (err) {
-          console.error('Group fetch failed:', err);
-        }
-      }
-
-      if (isConnected && destinationJid) {
-        await sock.sendMessage(destinationJid, messageContent);
-        console.log('✔️ Message sent.');
-        sent = true;
-        updateLastSentToday();
-      }
-
-      if (sent) clearInterval(intervalId);
-      if (attempts >= maxAttempts && !sent) {
-        clearInterval(intervalId);
-        console.error('❌ Failed to send after 5 minutes.');
-        if (config.alertSoundFile) {
-          exec(`termux-media-player play "${config.alertSoundFile}"`, (err) => {
-            if (err) console.error('Sound playback failed:', err);
-            else console.log('🔔 Sound played.');
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Send attempt error:', err);
+      const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+      this.authState = state;
+      this.saveCreds = saveCreds;
+      this.config = await this.readConfig();
+      await this.connect();
+      this.setupListeners();
+      this.scheduleDailyMessage();
+      console.log(`📅 Програма запущена. Повідомлення буде відправлено щодня о ${this.config.sendTime}.`);
+    } catch (error) {
+      console.error('Помилка ініціалізації:', error);
+      setTimeout(() => this.init(), 5000);
     }
-  }, 30000);
-}, {
-  timezone: 'Europe/Kyiv'
-});
+  }
+
+  async readConfig(): Promise<Config> {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const data = await fs.readFile(configPath, 'utf-8');
+    return JSON.parse(data);
+  }
+
+  async connect() {
+    try {
+      this.sock = makeWASocket({
+        auth: this.authState,
+        logger: pino({ level: 'silent' }),
+        browser: Browsers.baileys(this.config.app_name),
+        printQRInTerminal: true,
+        keepAliveIntervalMs: 60000,
+      });
+      this.sock.ev.on('creds.update', this.saveCreds!);
+      this.sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+          const error = lastDisconnect?.error as any;
+          if (error?.output?.statusCode !== 401) {
+            console.log('З\'єднання втрачено. Спроба перепідключення...');
+            await this.connect();
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Помилка підключення:', error);
+      setTimeout(() => this.connect(), 5000);
+    }
+  }
+
+  scheduleDailyMessage() {
+    const [hour, minute] = this.config.sendTime.split(':');
+    const cronExpression = `${minute} ${hour} * * *`;
+    cron.schedule(cronExpression, () => {
+      console.log(`⏰Запланована відправка о ${this.config.sendTime}.`);
+      this.sendMessageWithRetries();
+    });
+  }
+
+  async sendMessageWithRetries() {
+    const startTime = Date.now();
+    const timeout = 5 * 60 * 1000;
+    let sent = false;
+    while (Date.now() - startTime < timeout && !sent) {
+      try {
+        sent = await this.sendMessage();
+        if (!sent) await this.delay(30000);
+      } catch (error) {
+        console.error('🔔Помилка при відправці:', error);
+        await this.delay(30000);
+      }
+    }
+    if (!sent) this.playErrorSound();
+  }
+
+  async sendMessage(): Promise<boolean> {
+    try {
+      if (!this.sock) throw new Error('Немає з’єднання');
+      const groups = await this.sock.groupFetchAllParticipating();
+      const groupMetadata = Object.values(groups).find((group: any) => group.subject === this.config.group);
+      if (!groupMetadata) throw new Error('Групу не знайдено');
+      await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
+      console.log('✅Повідомлення відправлено');
+      return true;
+    } catch (error) {
+      console.error('❌Не вдалося відправити повідомлення:', error);
+      return false;
+    }
+  }
+
+  delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  playErrorSound() {
+    exec(`player-audio ${this.config.alertSoundFile}`, (error) => {
+      if (error) console.error('▶️ Помилка при відтворенні звуку:', error);
+    });
+  }
+
+  setupListeners() {
+    // Додаткові слухачі за потребою
+  }
+}
+
+const bot = new MyWABot();
+bot.init();
