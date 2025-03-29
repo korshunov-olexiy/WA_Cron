@@ -79,7 +79,7 @@ class MyWABot {
         }
       });
     } catch (error) {
-      console.error('❌Помилка підключення:', error);
+      console.error('🚩Помилка підключення:', error);
       setTimeout(() => this.connect(), 5000);
     }
   }
@@ -102,7 +102,7 @@ class MyWABot {
         sent = await this.sendMessage();
         if (!sent) await this.delay(30000);
       } catch (error) {
-        console.error('🔔Помилка при відправці:', error);
+        console.error('🚩Помилка при відправці:', error);
         await this.delay(30000);
       }
     }
@@ -111,12 +111,12 @@ class MyWABot {
 
   async sendMessage(): Promise<boolean> {
     try {
-      if (!this.sock) throw new Error('Немає з’єднання');
+      if (!this.sock) throw new Error('🔗📴Немає з’єднання');
       const groups = await this.sock.groupFetchAllParticipating();
       const groupMetadata = Object.values(groups).find((group: any) => group.subject === this.config.group);
-      if (!groupMetadata) throw new Error('Групу не знайдено');
+      if (!groupMetadata) throw new Error('🔍👭Групу не знайдено');
       await this.sock.sendMessage(groupMetadata.id, { text: this.config.message });
-      console.log('✅Повідомлення відправлено');
+      console.log('📩Повідомлення відправлено');
       return true;
     } catch (error) {
       console.error('❌Не вдалося відправити повідомлення:', error);
@@ -130,7 +130,7 @@ class MyWABot {
 
   playErrorSound() {
     exec(`player-audio ${this.config.alertSoundFile}`, (error) => {
-      if (error) console.error('▶️ Помилка при відтворенні звуку:', error);
+      if (error) console.error('🔕Помилка при відтворенні звуку:', error);
     });
   }
 
