@@ -45,7 +45,7 @@ class MyWABot {
       await this.connect();
       this.setupListeners();
       this.scheduleDailyMessage();
-      console.log(`📅 Повідомлення будуть відправлятись  щодня о ${this.config.sendTime} в групу ${this.config.group}.`);
+      console.log(`📅 Повідомлення будуть відправлятись  щодня о ${this.config.sendTime} в групу "${this.config.group}".`);
     } catch (error) {
       console.error('Помилка ініціалізації:', error);
       setTimeout(() => this.init(), 5000);
