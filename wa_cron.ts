@@ -36,7 +36,6 @@ class AppCron {
     }
     const cronExpression = this.getCronExpressionForDate(scheduledDate, this.config.sendTime);
     this.cronTask = cron.schedule(cronExpression, async () => {
-      console.log("::: run bot...");
       const result = await this.runBot();
       if (result) {
         console.log('✅Повідомлення відправлене.');
