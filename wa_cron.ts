@@ -28,28 +28,29 @@ class AppCron {
       const nextSendStr = this.getNextSendTime();
       try {
         await fs.access(this.sentOkPath);
-        console.log('🔔 Повідомлення вже відправлялось.');
-        console.log(`🕒 Наступна запланована відправка: ${nextSendStr}`);
+        console.log('🔔Повідомлення вже відправлялось.');
+        console.log(`🕒Наступна запланована відправка: ${nextSendStr}`);
         await fs.unlink(this.sentOkPath);
         return;
       } catch (err) {
         // Файл не існує – продовжуємо виконання
       }
       exec('ts-node WA_bot.ts', async (error, stdout, stderr) => {
-        if (error) console.error(`🔥 Помилка виконання бота: ${error.message}`);
+        if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
         console.log(stdout);
         console.error(stderr);
         try {
           await fs.access(this.sentOkPath);
-          console.log('✅ Повідомлення відправлене.');
-          console.log(`🕒 Наступна запланована відправка: ${nextSendStr}`);
+          console.log('✅Повідомлення відправлене.');
+          console.log(`🕒Наступна запланована відправка: ${nextSendStr}`);
+          await fs.unlink(this.sentOkPath);
           exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
-            if (err) console.error('🔇 Помилка відтворення звуку успіху:', err);
+            if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
         } catch (err) {
-          console.error('❌ Відправка не вдалася.');
+          console.error('❌Відправка не вдалася.');
           exec(`play-audio "${this.config.alertSoundFile}"`, (err) => {
-            if (err) console.error('🔇 Помилка відтворення звуку помилки:', err);
+            if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
       });
@@ -78,7 +79,7 @@ class AppCron {
     const appCron = new AppCron(config);
     await appCron.start();
   } catch (err) {
-    console.error('🔥 Помилка ініціалізації AppCron:', err);
+    console.error('🔥Помилка ініціалізації AppCron:', err);
     process.exit(1);
   }
 })();
