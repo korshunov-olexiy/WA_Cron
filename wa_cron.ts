@@ -31,16 +31,13 @@ class AppCron {
       await fs.access(this.sentOkPath);
       await fs.unlink(this.sentOkPath);
       nextSend = this.getTomorrowSendDate();
-      console.log(`🔔Повідомлення сьогодні відправлялось. Наступна відправка: ${this.formatDate(nextSend)} ${this.config.sendTime}`);
     } catch {
       // Файл не існує – плануємо відправку на сьогодні (якщо час ще не минув) або на завтра
       nextSend = this.getTodayOrTomorrowSendDate();
-      console.log(`🕜Запланована відправка: ${this.formatDate(nextSend)} ${this.config.sendTime}`);
     }
+    console.log(`🕜Наступна відправка: ${this.formatDate(nextSend)} ${this.config.sendTime}`);
     const cronExpr = this.getCronExpressionForDate(nextSend);
-    console.log(':::', cronExpr);
     const task = cron.schedule(cronExpr, () => {
-      // console.log(`Запускаємо WA_bot.ts для відправки повідомлення о ${this.config.sendTime}`);
       exec('ts-node WA_bot.ts', async (error, stdout, stderr) => {
         if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
         console.log(stdout);
