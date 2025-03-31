@@ -1,15 +1,7 @@
-import { exec } from 'child_process';
 import cron from 'node-cron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-
-interface Config {
-  group: string;
-  message: string;
-  sendTime: string;
-  alertSoundFile: string;
-  successSoundFile: string;
-}
+import { WhatsAppBot, Config } from './WA_bot';
 
 class AppCron {
   private config: Config;
@@ -24,45 +16,41 @@ class AppCron {
   public async start() {
     let scheduledDate: Date;
     try {
-      // Файл існує – повідомлення уже відправлялось сьогодні
+      // Якщо файл існує – повідомлення відправлено сьогодні, плануємо на завтра
       await fs.access(this.sentOkPath);
       await fs.unlink(this.sentOkPath);
       scheduledDate = new Date();
       scheduledDate.setDate(scheduledDate.getDate() + 1);
-      console.log(`🔔Повідомлення сьогодні відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
+      console.log(`🔔 Повідомлення вже відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     } catch {
       // Файл не знайдено – плануємо відправку на сьогодні
       scheduledDate = new Date();
       const [hourStr, minuteStr] = this.config.sendTime.split(':');
       const scheduledToday = new Date(scheduledDate);
       scheduledToday.setHours(parseInt(hourStr, 10), parseInt(minuteStr, 10), 0, 0);
-      // Якщо час сьогодні вже минув – плануємо на завтра
       if (scheduledToday <= new Date()) {
         scheduledToday.setDate(scheduledToday.getDate() + 1);
       }
       scheduledDate = scheduledToday;
-      console.log(`🕜Запланована відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
+      console.log(`🕒Запланована відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     }
     const cronExpression = this.getCronExpressionForDate(scheduledDate, this.config.sendTime);
-    this.cronTask = cron.schedule(cronExpression, () => {
-      exec('npx ts-node WA_bot.ts', async (error, stdout, stderr) => {
-        if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
-        console.log(stdout);
-        console.error(stderr);
-        try {
-          await fs.access(this.sentOkPath);
-          console.log('✅Повідомлення відправлене.');
-          exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
-            if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
-          });
-        } catch {
-          console.error('🔥Відправка не вдалася.');
-          exec(`play-audio "${this.config.alertSoundFile}"`, (err) => {
-            if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
-          });
-        }
-      });
+    this.cronTask = cron.schedule(cronExpression, async () => {
+      const result = await this.runBot();
+      if (result) {
+        console.log('✅Повідомлення відправлене.');
+        console.log(`🕒Наступна запланована відправка: ${this.getNextScheduledTime()}`);
+        this.playSound(this.config.successSoundFile);
+      } else {
+        console.error('❌Відправка не вдалася.');
+        this.playSound(this.config.alertSoundFile);
+      }
     });
+  }
+
+  private async runBot(): Promise<boolean> {
+    const bot = new WhatsAppBot(this.config);
+    return await bot.run();
   }
 
   private getCronExpressionForDate(date: Date, time: string): string {
@@ -79,6 +67,19 @@ class AppCron {
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const yyyy = date.getFullYear();
     return `${dd}.${mm}.${yyyy}`;
+  }
+
+  private getNextScheduledTime(): string {
+    const scheduledDate = new Date();
+    scheduledDate.setDate(scheduledDate.getDate() + 1);
+    return `${this.formatDate(scheduledDate)} ${this.config.sendTime}`;
+  }
+
+  private playSound(soundFile: string) {
+    const { exec } = require('child_process');
+    exec(`play-audio "${soundFile}"`, (err: any) => {
+      if (err) console.error(`🔇Помилка відтворення звуку ${soundFile}:`, err);
+    });
   }
 }
 
