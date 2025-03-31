@@ -25,11 +25,11 @@ class AppCron {
     const cronExpression = this.getCronExpression(this.config.sendTime);
     console.log(`Запланована відправка о ${this.config.sendTime}`);
     this.cronTask = cron.schedule(cronExpression, async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const nextSendStr = this.getNextSendTime();
       try {
         await fs.access(this.sentOkPath);
         console.log('🔔 Повідомлення вже відправлялось.');
-        console.log(`🕒 Запланована відправка: ${today} ${this.config.sendTime}`);
+        console.log(`🕒 Наступна запланована відправка: ${nextSendStr}`);
         await fs.unlink(this.sentOkPath);
         return;
       } catch (err) {
@@ -42,7 +42,7 @@ class AppCron {
         try {
           await fs.access(this.sentOkPath);
           console.log('✅ Повідомлення відправлене.');
-          console.log(`🕒 Запланована відправка: ${today} ${this.config.sendTime}`);
+          console.log(`🕒 Наступна запланована відправка: ${nextSendStr}`);
           exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
             if (err) console.error('🔇 Помилка відтворення звуку успіху:', err);
           });
@@ -59,6 +59,14 @@ class AppCron {
   private getCronExpression(time: string): string {
     const [hour, minute] = time.split(':').map(Number);
     return `${minute} ${hour} * * *`;
+  }
+
+  private getNextSendTime(): string {
+    const [hour, minute] = this.config.sendTime.split(':');
+    let tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split('T')[0];
+    return `${dateStr} ${hour}:${minute}`;
   }
 }
 
