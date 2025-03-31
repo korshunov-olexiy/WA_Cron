@@ -23,17 +23,16 @@ class AppCron {
 
   public async start() {
     const cronExpression = this.getCronExpression(this.config.sendTime);
-    console.log(`Заплановано виконання WA_bot.ts: ${cronExpression}`);
+    console.log(`Запланована відправка о ${this.config.sendTime}`);
     this.cronTask = cron.schedule(cronExpression, async () => {
-      console.log('Старт WA_bot.ts');
       const today = new Date().toISOString().split('T')[0];
       let status = null;
       try {
         const statusData = await fs.readFile(this.statusFilePath, 'utf-8');
         status = JSON.parse(statusData);
-      } catch (err) { }
+      } catch (err) {}
       if (status && status.date === today && status.sent) {
-        console.log('Повідомлення вже було відправлено сьогодні.');
+        console.log('🔔Повідомлення вже відправлялось');
         return;
       }
       exec('ts-node WA_bot.ts', async (error, stdout, stderr) => {
@@ -49,14 +48,19 @@ class AppCron {
           console.error('Не вдалося прочитати статус:', err);
         }
         if (sendStatus) {
-          console.log('✔ Повідомлення відправлено успішно.');
-          exec(`termux-media-player play "${this.config.successSoundFile}"`, (err) => {
-            if (err) console.error('Помилка відтворення звуку успіху:', err);
+          console.log('✅Повідомлення відправлене.');
+          const now = new Date();
+          const [sendHour, sendMinute] = this.config.sendTime.split(':').map(Number);
+          let nextScheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sendHour, sendMinute, 0);
+          if (now >= nextScheduled) nextScheduled.setDate(nextScheduled.getDate() + 1);
+          console.log(`🕜Запланована наступна відправка: ${nextScheduled.toLocaleString()}`);
+          exec(`play-sound "${this.config.successSoundFile}"`, (err) => {
+            if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
         } else {
-          console.error('❌ Відправлення повідомлення не вдалося.');
-          exec(`termux-media-player play "${this.config.alertSoundFile}"`, (err) => {
-            if (err) console.error('Помилка відтворення звуку помилки:', err);
+          console.error('❌Відправка не вдалася.');
+          exec(`play-sound "${this.config.alertSoundFile}"`, (err) => {
+            if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
       });

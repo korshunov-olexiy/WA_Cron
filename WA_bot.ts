@@ -59,7 +59,7 @@ class WhatsAppBot {
         const { connection, lastDisconnect } = update;
         if (connection === 'open') {
           this.isConnected = true;
-          console.log('✅ Підключення до WhatsApp успішне');
+          console.log('📶Підключення до WhatsApp успішне');
           if (!this.targetJid && this.config.group) {
             try {
               const groups = await this.sock.groupFetchAllParticipating();
@@ -70,7 +70,7 @@ class WhatsAppBot {
                 }
               }
               if (!this.targetJid) {
-                console.error(`⚠ Група "${this.config.group}" не знайдена.`);
+                console.error(`❌Група "${this.config.group}" не знайдена.`);
                 await this.writeStatus(false);
                 process.exit(1);
               }
@@ -90,14 +90,14 @@ class WhatsAppBot {
               this.connectToWhatsApp();
             }, 5000);
           } else {
-            console.error('Користувач вийшов із WhatsApp.');
+            console.error('❌Користувач вийшов із WhatsApp.');
             await this.writeStatus(false);
             process.exit(1);
           }
         }
       });
     } catch (err) {
-      console.error('Помилка підключення до WhatsApp:', err);
+      console.error('📴Помилка підключення до WhatsApp:', err);
       await this.writeStatus(false);
       process.exit(1);
     }
@@ -109,8 +109,7 @@ class WhatsAppBot {
       try {
         if (this.isConnected && this.targetJid) {
           await this.sock.sendMessage(this.targetJid, { text: this.config.message });
-          console.log('✔ Повідомлення успішно відправлене.');
-          this.sent = true;
+          this.sent = true;  // успішна відправка повідомлення
           clearInterval(intervalId);
           await this.writeStatus(true);
           process.exit(0);
@@ -120,13 +119,13 @@ class WhatsAppBot {
         if (new Date() >= this.deadline) {
           clearInterval(intervalId);
           if (!this.sent) {
-            console.error('❌ Не вдалося відправити повідомлення протягом 5 хвилин.');
+            console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
             await this.writeStatus(false);
             process.exit(1);
           }
         }
       } catch (err) {
-        console.error('Помилка при спробі відправлення:', err);
+        console.error('❌Помилка при спробі відправлення:', err);
       }
     }, 30000);
   }
@@ -139,7 +138,7 @@ class WhatsAppBot {
     try {
       await fs.writeFile(path.join(__dirname, 'send_status.json'), JSON.stringify(status));
     } catch (err) {
-      console.error('Помилка запису статусу:', err);
+      console.error('❌Помилка запису статусу:', err);
     }
   }
 }
@@ -152,7 +151,7 @@ class WhatsAppBot {
     const bot = new WhatsAppBot(config);
     await bot.start();
   } catch (err) {
-    console.error('Помилка ініціалізації WA_bot:', err);
+    console.error('❌Помилка ініціалізації бота:', err);
     process.exit(1);
   }
 })();
