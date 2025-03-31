@@ -38,7 +38,8 @@ class AppCron {
     console.log(`🕜Наступна відправка: ${this.formatDate(nextSend)} ${this.config.sendTime}`);
     const cronExpr = this.getCronExpressionForDate(nextSend);
     const task = cron.schedule(cronExpr, () => {
-      exec('ts-node WA_bot.ts', async (error, stdout, stderr) => {
+      console.log("::: запускаємо бот...");
+      exec('npx ts-node WA_bot.ts', async (error, stdout, stderr) => {
         if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
         console.log(stdout);
         console.error(stderr);
