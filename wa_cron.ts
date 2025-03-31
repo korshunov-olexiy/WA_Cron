@@ -35,6 +35,7 @@ class AppCron {
       console.log(`🕒Запланована відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     }
     const cronExpression = this.getCronExpressionForDate(scheduledDate, this.config.sendTime);
+    console.log(':::', cronExpression);
     this.cronTask = cron.schedule(cronExpression, async () => {
       const result = await this.runBot();
       if (result) {
@@ -54,9 +55,7 @@ class AppCron {
   }
 
   private getCronExpressionForDate(date: Date, time: string): string {
-    const [hourStr, minuteStr] = time.split(':');
-    const minute = parseInt(minuteStr, 10);
-    const hour = parseInt(hourStr, 10);
+    const [hour, minute] = time.split(':');
     const day = date.getDate();
     const month = date.getMonth() + 1;
     return `${minute} ${hour} ${day} ${month} *`;
