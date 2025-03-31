@@ -54,12 +54,12 @@ class AppCron {
           let nextScheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sendHour, sendMinute, 0);
           if (now >= nextScheduled) nextScheduled.setDate(nextScheduled.getDate() + 1);
           console.log(`🕜Запланована наступна відправка: ${nextScheduled.toLocaleString()}`);
-          exec(`play-sound "${this.config.successSoundFile}"`, (err) => {
+          exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
         } else {
           console.error('❌Відправка не вдалася.');
-          exec(`play-sound "${this.config.alertSoundFile}"`, (err) => {
+          exec(`play-audio "${this.config.alertSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
