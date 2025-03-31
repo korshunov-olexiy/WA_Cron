@@ -50,7 +50,7 @@ class WhatsAppBot {
         const { connection, lastDisconnect } = update;
         if (connection === 'open') {
           this.isConnected = true;
-          console.log('✅ Підключення до WhatsApp успішне');
+          console.log('✅Підключення до WhatsApp успішне');
           if (!this.targetJid && this.config.group) {
             try {
               const groups = await this.sock.groupFetchAllParticipating();
@@ -61,11 +61,11 @@ class WhatsAppBot {
                 }
               }
               if (!this.targetJid) {
-                console.error(`⚠ Група "${this.config.group}" не знайдена.`);
+                console.error(`🔥Група "${this.config.group}" не знайдена.`);
                 process.exit(1);
               }
             } catch (err) {
-              console.error('Помилка отримання груп:', err);
+              console.error('🔥Помилка отримання груп:', err);
               process.exit(1);
             }
           }
@@ -73,19 +73,19 @@ class WhatsAppBot {
           this.isConnected = false;
           const error = lastDisconnect?.error;
           const shouldReconnect = !(error && (error instanceof Boom) && error.output?.statusCode === 401);
-          console.warn('З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
+          console.warn('🔗З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
           if (shouldReconnect) {
             setTimeout(() => {
               this.connectToWhatsApp();
             }, 5000);
           } else {
-            console.error('Користувач вийшов із WhatsApp.');
+            console.error('💥Користувач вийшов із WhatsApp.');
             process.exit(1);
           }
         }
       });
     } catch (err) {
-      console.error('Помилка підключення до WhatsApp:', err);
+      console.error('💥Помилка підключення до WhatsApp:', err);
       process.exit(1);
     }
   }
@@ -96,23 +96,22 @@ class WhatsAppBot {
       try {
         if (this.isConnected && this.targetJid) {
           await this.sock.sendMessage(this.targetJid, { text: this.config.message });
-          console.log('✔ Повідомлення успішно відправлене.');
           this.sent = true;
           clearInterval(intervalId);
           await fs.writeFile(this.sentOkPath, 'ok');
           process.exit(0);
         } else {
-          console.log('Очікування підключення або отримання targetJid...');
+          console.log('💣Очікування підключення або отримання targetJid...');
         }
         if (new Date() >= this.deadline) {
           clearInterval(intervalId);
           if (!this.sent) {
-            console.error('❌ Не вдалося відправити повідомлення протягом 5 хвилин.');
+            console.error('🔥Не вдалося відправити повідомлення протягом 5 хвилин.');
             process.exit(1);
           }
         }
       } catch (err) {
-        console.error('Помилка при спробі відправлення:', err);
+        console.error('🔥Помилка при спробі відправлення:', err);
       }
     }, 30000);
   }
@@ -126,7 +125,7 @@ class WhatsAppBot {
     const bot = new WhatsAppBot(config);
     await bot.start();
   } catch (err) {
-    console.error('Помилка ініціалізації WA_bot:', err);
+    console.error('💘Помилка ініціалізації WA_bot:', err);
     process.exit(1);
   }
 })();
