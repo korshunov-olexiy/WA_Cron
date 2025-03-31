@@ -106,12 +106,12 @@ export class WhatsAppBot {
           if (this.isConnected && this.targetJid) {
             resolve();
           } else {
-            reject(new Error("Не вдалося встановити з'єднання або отримати targetJid"));
+            reject(new Error("💥Не вдалося встановити з'єднання або отримати targetJid"));
           }
         }, 30000);
       });
     } catch (err) {
-      console.error('Помилка підключення до WhatsApp:', err);
+      console.error('💥Помилка підключення до WhatsApp:', err);
       throw err;
     }
   }
@@ -123,13 +123,13 @@ export class WhatsAppBot {
         try {
           if (this.isConnected && this.targetJid) {
             await this.sock.sendMessage(this.targetJid, { text: this.config.message });
-            console.log('✔ Повідомлення успішно відправлене.');
+            // console.log('✔ Повідомлення успішно відправлене.');
             this.sent = true;
             clearInterval(intervalId);
             try {
               await fs.writeFile(this.sentOkPath, 'ok');
             } catch (err) {
-              console.error('Помилка запису файлу sent_ok:', err);
+              console.error('💥Помилка запису файлу sent_ok:', err);
             }
             resolve(true);
           } else {
@@ -138,12 +138,12 @@ export class WhatsAppBot {
           if (new Date() >= this.deadline) {
             clearInterval(intervalId);
             if (!this.sent) {
-              console.error('❌ Не вдалося відправити повідомлення протягом 5 хвилин.');
+              console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
               resolve(false);
             }
           }
         } catch (err) {
-          console.error('Помилка при спробі відправлення:', err);
+          console.error('💥Помилка при спробі відправлення:', err);
         }
       }, 30000);
     });

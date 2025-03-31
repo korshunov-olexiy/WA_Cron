@@ -21,7 +21,7 @@ class AppCron {
       await fs.unlink(this.sentOkPath);
       scheduledDate = new Date();
       scheduledDate.setDate(scheduledDate.getDate() + 1);
-      console.log(`🔔 Повідомлення вже відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
+      console.log(`🔔Повідомлення вже відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     } catch {
       // Файл не знайдено – плануємо відправку на сьогодні
       scheduledDate = new Date();

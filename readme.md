@@ -1,6 +1,9 @@
 ## WhatsApp-бот для відправки повідомлення кожного дня у визначену групу та час.
 ***Перевірений та працює на Windows, Linux та під Android в Termux***
 
+Програма складається з двох частин:<br>
+* **wa_cron.ts** - планувальник запуску модуля WA_bot кожного дня у визначений в конгфігураційному файлі **config.json** час.<br>
+* **WA_bot.ts** - модуль, в якому реалізований клас **WhatsAppBot**, який виконує відправку вказаного повідомлення у вказану групу.<br><br>
 Для роботи даної програми треба встановити TypeScript:
 ```bash
 npm install -g typescript
@@ -25,15 +28,13 @@ tsc --init
 Створити конфігураційний файл config.json наступного змісту:
 ```json
 {
-    "app_name": "MY_APP",
+    "app_name": "MY_BOT",
     "group": "Назва групи для відправки повідомлення",
     "message": "текст повідомлення",
     "sendTime": "15:28",
     "msgSentToday": false,
-    "highlightStart": "\u001b[1;30;42m",
-    "highlightEnd": "\u001b[0m",
-    "errorHighlightStart": "\u001b[1;37;41m",
-    "errorHighlightEnd": "\u001b[0m"
+    "alertSoundFile": "no_sent_msg.mp3",
+    "successSoundFile": "sent_msg.mp3"
 }
 ```
 Після чого можна виконувати програму:
