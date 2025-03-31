@@ -13,6 +13,7 @@ interface Config {
 
 class AppCron {
   private config: Config;
+  private cronTask: cron.ScheduledTask | null = null;
   private sentOkPath: string;
 
   constructor(config: Config) {
@@ -21,31 +22,36 @@ class AppCron {
   }
 
   public async start() {
-    await this.scheduleSend();
-  }
-
-  private async scheduleSend() {
-    let nextSend: Date;
+    let scheduledDate: Date;
     try {
-      // Якщо файл sent_ok існує – повідомлення вже відправлено сьогодні
+      // Файл існує – повідомлення уже відправлялось сьогодні
       await fs.access(this.sentOkPath);
       await fs.unlink(this.sentOkPath);
-      nextSend = this.getTomorrowSendDate();
+      scheduledDate = new Date();
+      scheduledDate.setDate(scheduledDate.getDate() + 1);
+      console.log(`🔔Повідомлення сьогодні відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     } catch {
-      // Файл не існує – плануємо відправку на сьогодні (якщо час ще не минув) або на завтра
-      nextSend = this.getTodayOrTomorrowSendDate();
+      // Файл не знайдено – плануємо відправку на сьогодні
+      scheduledDate = new Date();
+      const [hourStr, minuteStr] = this.config.sendTime.split(':');
+      const scheduledToday = new Date(scheduledDate);
+      scheduledToday.setHours(parseInt(hourStr, 10), parseInt(minuteStr, 10), 0, 0);
+      // Якщо час сьогодні вже минув – плануємо на завтра
+      if (scheduledToday <= new Date()) {
+        scheduledToday.setDate(scheduledToday.getDate() + 1);
+      }
+      scheduledDate = scheduledToday;
+      console.log(`🕜Запланована відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     }
-    console.log(`🕜Наступна відправка: ${this.formatDate(nextSend)} ${this.config.sendTime}`);
-    const cronExpr = this.getCronExpressionForDate(nextSend);
-    const task = cron.schedule(cronExpr, () => {
-      console.log("::: запускаємо бот...");
+    const cronExpression = this.getCronExpressionForDate(scheduledDate, this.config.sendTime);
+    this.cronTask = cron.schedule(cronExpression, () => {
       exec('npx ts-node WA_bot.ts', async (error, stdout, stderr) => {
         if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
         console.log(stdout);
         console.error(stderr);
         try {
           await fs.access(this.sentOkPath);
-          console.log('✅Повідомлення відправлено.');
+          console.log('✅Повідомлення відправлене.');
           exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
@@ -55,40 +61,16 @@ class AppCron {
             if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
-        task.stop();
-        // Після завершення поточного виклику переплановуємо наступну відправку
-        await this.scheduleSend();
       });
     });
   }
 
-  private getTodayOrTomorrowSendDate(): Date {
-    const now = new Date();
-    const [hourStr, minuteStr] = this.config.sendTime.split(':');
-    const scheduledToday = new Date(now);
-    scheduledToday.setHours(parseInt(hourStr, 10), parseInt(minuteStr, 10), 0, 0);
-    // Якщо час сьогодні ще не минув – плануємо на сьогодні, інакше – на завтра
-    if (scheduledToday > now) {
-      return scheduledToday;
-    }
-    scheduledToday.setDate(scheduledToday.getDate() + 1);
-    return scheduledToday;
-  }
-
-  private getTomorrowSendDate(): Date {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const [hourStr, minuteStr] = this.config.sendTime.split(':');
-    tomorrow.setHours(parseInt(hourStr, 10), parseInt(minuteStr, 10), 0, 0);
-    return tomorrow;
-  }
-
-  private getCronExpressionForDate(date: Date): string {
-    const minute = date.getMinutes();
-    const hour = date.getHours();
+  private getCronExpressionForDate(date: Date, time: string): string {
+    const [hourStr, minuteStr] = time.split(':');
+    const minute = parseInt(minuteStr, 10);
+    const hour = parseInt(hourStr, 10);
     const day = date.getDate();
     const month = date.getMonth() + 1;
-    // Формуємо cron-вираз для запуску в конкретний день та місяць
     return `${minute} ${hour} ${day} ${month} *`;
   }
 
