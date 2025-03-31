@@ -51,12 +51,12 @@ class AppCron {
         if (sendStatus) {
           console.log('✅Повідомлення відправлене.');
           console.log(`🕒Запланована відправка: ${today} ${this.config.sendTime}`);
-          exec(`play-sound "${this.config.successSoundFile}"`, (err) => {
+          exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
         } else {
           console.error('❌Відправка не вдалася.');
-          exec(`play-sound "${this.config.alertSoundFile}"`, (err) => {
+          exec(`play-audio "${this.config.alertSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
