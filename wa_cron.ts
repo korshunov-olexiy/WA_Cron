@@ -30,13 +30,14 @@ class AppCron {
       try {
         const statusData = await fs.readFile(this.statusFilePath, 'utf-8');
         status = JSON.parse(statusData);
-      } catch (err) {}
+      } catch (err) { }
       if (status && status.date === today && status.sent) {
-        console.log('🔔Повідомлення вже відправлялось');
+        console.log('🔔Повідомлення вже відправлялось.');
+        console.log(`🕒Запланована відправка: ${today} ${this.config.sendTime}`);
         return;
       }
       exec('ts-node WA_bot.ts', async (error, stdout, stderr) => {
-        if (error) console.error(`Помилка виконання WA_bot.ts: ${error.message}`);
+        if (error) console.error(`🔥Помилка виконання бота: ${error.message}`);
         console.log(stdout);
         console.error(stderr);
         let sendStatus = false;
@@ -45,21 +46,17 @@ class AppCron {
           const sendData = JSON.parse(data);
           if (sendData.date === today && sendData.sent) sendStatus = true;
         } catch (err) {
-          console.error('Не вдалося прочитати статус:', err);
+          console.error('🔥Не вдалося прочитати статус:', err);
         }
         if (sendStatus) {
           console.log('✅Повідомлення відправлене.');
-          const now = new Date();
-          const [sendHour, sendMinute] = this.config.sendTime.split(':').map(Number);
-          let nextScheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sendHour, sendMinute, 0);
-          if (now >= nextScheduled) nextScheduled.setDate(nextScheduled.getDate() + 1);
-          console.log(`🕜Запланована наступна відправка: ${nextScheduled.toLocaleString()}`);
-          exec(`play-audio "${this.config.successSoundFile}"`, (err) => {
+          console.log(`🕒Запланована відправка: ${today} ${this.config.sendTime}`);
+          exec(`play-sound "${this.config.successSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку успіху:', err);
           });
         } else {
           console.error('❌Відправка не вдалася.');
-          exec(`play-audio "${this.config.alertSoundFile}"`, (err) => {
+          exec(`play-sound "${this.config.alertSoundFile}"`, (err) => {
             if (err) console.error('🔇Помилка відтворення звуку помилки:', err);
           });
         }
@@ -81,7 +78,7 @@ class AppCron {
     const appCron = new AppCron(config);
     await appCron.start();
   } catch (err) {
-    console.error('Помилка ініціалізації AppCron:', err);
+    console.error('🔥Помилка ініціалізації AppCron:', err);
     process.exit(1);
   }
 })();
