@@ -45,7 +45,7 @@ export class WhatsAppBot {
       return result;
     } catch (error) {
       console.error("Помилка роботи WhatsAppBot:", error);
-      this.cleanup();
+      await this.cleanup();
       return false;
     }
   }
@@ -141,7 +141,7 @@ export class WhatsAppBot {
             } catch (err) {
               console.error('💥Помилка запису файлу sent_ok:', err);
             }
-            this.cleanup();
+            await this.cleanup();
             resolve(true);
           } else {
             console.log('Очікування підключення або отримання targetJid...');
@@ -150,7 +150,7 @@ export class WhatsAppBot {
             clearInterval(intervalId);
             if (!this.sent) {
               console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
-              this.cleanup();
+              await this.cleanup();
               resolve(false);
             }
           }
@@ -161,7 +161,7 @@ export class WhatsAppBot {
     });
   }
 
-  private cleanup(): void {
+  private async cleanup(): Promise<void> {
     this.finished = true;
     if (this.reconnectTimeoutId) {
       clearTimeout(this.reconnectTimeoutId);
@@ -170,7 +170,15 @@ export class WhatsAppBot {
     if (this.sock) {
       this.sock.ev.off('creds.update', this.saveCreds);
       this.sock.ev.off('connection.update', this.connectionUpdateHandler);
-      this.sock.close();
+      if (typeof this.sock.logout === 'function') {
+        try {
+          await this.sock.logout();
+        } catch (error) {
+          console.error('Помилка при виході з сесії:', error);
+        }
+      } else {
+        console.error('Метод logout не визначений, неможливо закрити з’єднання.');
+      }
     }
   }
 }
