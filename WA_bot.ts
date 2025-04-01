@@ -23,6 +23,10 @@ export class WhatsAppBot {
   private maxAttempts: number;
   private deadline: Date;
   private sentOkPath: string;
+  private connectionUpdateHandler: ((update: any) => void) | null = null;
+  private credsUpdateHandler: ((...args: any[]) => void) | null = null;
+  private sendIntervalId: NodeJS.Timeout | null = null;
+  private finished = false;
 
   constructor(config: Config) {
     this.config = config;
@@ -36,116 +40,142 @@ export class WhatsAppBot {
   }
 
   public async run(): Promise<boolean> {
+    let result!: boolean;
     try {
       await this.connectToWhatsApp();
-      return await this.trySendMessage();
+      result = await this.trySendMessage();
     } catch (error) {
       console.error("Помилка роботи WhatsAppBot:", error);
-      return false;
+      result = false;
+    } finally {
+      await this.cleanup();
+      process.exit(result ? 0 : 1);
     }
+    return result;
   }
 
   private async connectToWhatsApp(): Promise<void> {
-    try {
-      const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-      this.sock = makeWASocket({
-        auth: state,
-        logger: pino({ level: 'silent' }),
-        browser: Browsers.baileys(this.config.app_name),
-        printQRInTerminal: true,
-        keepAliveIntervalMs: 60000,
-      });
-      this.sock.ev.on('creds.update', saveCreds);
-      this.sock.ev.on('connection.update', async (update: any) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'open') {
-          this.isConnected = true;
-          console.log('✅ Підключення до WhatsApp успішне');
-          if (!this.targetJid && this.config.group) {
-            try {
-              const groups = await this.sock.groupFetchAllParticipating();
-              for (const [jid, groupInfo] of Object.entries(groups)) {
-                if ((groupInfo as any).subject === this.config.group) {
-                  this.targetJid = jid;
-                  break;
-                }
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    this.sock = makeWASocket({
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      browser: Browsers.baileys(this.config.app_name),
+      printQRInTerminal: true,
+      keepAliveIntervalMs: 60000,
+    });
+    this.credsUpdateHandler = () => saveCreds();
+    this.connectionUpdateHandler = async (update: any) => {
+      if (this.finished) return;
+      const { connection, lastDisconnect } = update;
+      if (connection === 'open') {
+        this.isConnected = true;
+        console.log('✅Підключення до WhatsApp успішне');
+        if (!this.targetJid && this.config.group) {
+          try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            for (const [jid, groupInfo] of Object.entries(groups)) {
+              if ((groupInfo as any).subject === this.config.group) {
+                this.targetJid = jid;
+                break;
               }
-              if (!this.targetJid) {
-                console.error(`⚠ Група "${this.config.group}" не знайдена.`);
-              }
-            } catch (err) {
-              console.error('Помилка отримання груп:', err);
             }
+            if (!this.targetJid) {
+              console.error(`💥Група "${this.config.group}" не знайдена.`);
+            }
+          } catch (err) {
+            console.error('💥Помилка отримання груп:', err);
           }
-        } else if (connection === 'close') {
-          this.isConnected = false;
-          const error = lastDisconnect?.error;
-          const shouldReconnect = !(error && (error instanceof Boom) && error.output?.statusCode === 401);
-          console.warn('З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
-          if (shouldReconnect) {
-            setTimeout(() => {
+        }
+      } else if (connection === 'close') {
+        this.isConnected = false;
+        const error = lastDisconnect?.error;
+        const shouldReconnect = !(error && (error instanceof Boom) && error.output?.statusCode === 401);
+        console.warn('З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
+        if (!this.finished && shouldReconnect) {
+          setTimeout(() => {
+            if (!this.finished) {
               this.connectToWhatsApp().catch(err => {
                 console.error('Не вдалося перепідключитись:', err);
               });
-            }, 5000);
-          } else {
-            console.error('Користувач вийшов із WhatsApp.');
-          }
+            }
+          }, 5000);
+        } else {
+          console.error('💥Користувач вийшов із WhatsApp.');
         }
-      });
-      // Очікуємо встановлення з'єднання та отримання targetJid (максимум 30 сек)
-      await new Promise<void>((resolve, reject) => {
-        const checkInterval = setInterval(() => {
-          if (this.isConnected && this.targetJid) {
-            clearInterval(checkInterval);
-            resolve();
-          }
-        }, 1000);
-        setTimeout(() => {
+      }
+    };
+    this.sock.ev.on('creds.update', this.credsUpdateHandler);
+    this.sock.ev.on('connection.update', this.connectionUpdateHandler);
+    await new Promise<void>((resolve, reject) => {
+      const checkInterval = setInterval(() => {
+        if (this.isConnected && this.targetJid) {
           clearInterval(checkInterval);
-          if (this.isConnected && this.targetJid) {
-            resolve();
-          } else {
-            reject(new Error("💥Не вдалося встановити з'єднання або отримати targetJid"));
-          }
-        }, 30000);
-      });
-    } catch (err) {
-      console.error('💥Помилка підключення до WhatsApp:', err);
-      throw err;
-    }
+          resolve();
+        }
+      }, 1000);
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (this.isConnected && this.targetJid) {
+          resolve();
+        } else {
+          reject(new Error("💥Не вдалося встановити з'єднання або отримати targetJid"));
+        }
+      }, 30000);
+    });
   }
 
   private trySendMessage(): Promise<boolean> {
     return new Promise((resolve) => {
-      const intervalId = setInterval(async () => {
+      this.sendIntervalId = setInterval(async () => {
         this.attempts++;
-        try {
-          if (this.isConnected && this.targetJid) {
+        if (this.isConnected && this.targetJid) {
+          try {
             await this.sock.sendMessage(this.targetJid, { text: this.config.message });
-            // console.log('✔ Повідомлення успішно відправлене.');
             this.sent = true;
-            clearInterval(intervalId);
+            clearInterval(this.sendIntervalId!);
+            this.sendIntervalId = null;
             try {
               await fs.writeFile(this.sentOkPath, 'ok');
             } catch (err) {
-              console.error('💥Помилка запису файлу sent_ok:', err);
+              console.error('Помилка запису файлу sent_ok:', err);
             }
             resolve(true);
-          } else {
-            console.log('Очікування підключення або отримання targetJid...');
+          } catch (err) {
+            console.error('💥Помилка при спробі відправлення:', err);
           }
-          if (new Date() >= this.deadline) {
-            clearInterval(intervalId);
-            if (!this.sent) {
-              console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
-              resolve(false);
-            }
+        } else {
+          console.log('Очікування підключення або отримання targetJid...');
+        }
+        if (new Date() >= this.deadline) {
+          clearInterval(this.sendIntervalId!);
+          this.sendIntervalId = null;
+          if (!this.sent) {
+            console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
+            resolve(false);
           }
-        } catch (err) {
-          console.error('💥Помилка при спробі відправлення:', err);
         }
       }, 30000);
     });
+  }
+
+  private async cleanup(): Promise<void> {
+    this.finished = true;
+    if (this.sendIntervalId) {
+      clearInterval(this.sendIntervalId);
+      this.sendIntervalId = null;
+    }
+    if (this.sock) {
+      if (this.credsUpdateHandler) {
+        this.sock.ev.off('creds.update', this.credsUpdateHandler);
+      }
+      if (this.connectionUpdateHandler) {
+        this.sock.ev.off('connection.update', this.connectionUpdateHandler);
+      }
+      try {
+        this.sock.ws?.close();
+      } catch (e) {
+        console.error('❌Помилка закриття з\'єднання:', e);
+      }
+    }
   }
 }
