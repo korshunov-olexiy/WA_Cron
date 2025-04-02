@@ -13,21 +13,28 @@ class AppCron {
     this.sentOkPath = path.join(__dirname, 'sent_ok');
   }
 
+  public async isSentToday(): Promise<boolean> {
+    try {
+      const stats = await fs.stat(this.sentOkPath);
+      stats.isFile();
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
   public async start() {
     let scheduledDate: Date;
-    try {
-      // Якщо файл існує – повідомлення відправлено сьогодні, плануємо на завтра
-      await fs.access(this.sentOkPath);
+    scheduledDate = new Date();
+    if (await this.isSentToday()) {   // Якщо файл існує – плануємо відправку на завтра
+      // await fs.access(this.sentOkPath);
       await fs.unlink(this.sentOkPath);
-      scheduledDate = new Date();
       scheduledDate.setDate(scheduledDate.getDate() + 1);
-      console.log(`🔔Повідомлення вже відправлялось. Наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
-    } catch {
-      // Файл не знайдено – плануємо відправку на сьогодні
-      scheduledDate = new Date();
-      const [hourStr, minuteStr] = this.config.sendTime.split(':');
+      console.log(`🕒Запланована наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
+    } else {   // Файл не знайдено – плануємо відправку на сьогодні
       const scheduledToday = new Date(scheduledDate);
-      scheduledToday.setHours(parseInt(hourStr, 10), parseInt(minuteStr, 10), 0, 0);
+      const [hour, minute] = this.config.sendTime.split(':');
+      scheduledDate.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
       if (scheduledToday <= new Date()) {
         scheduledToday.setDate(scheduledToday.getDate() + 1);
       }
@@ -39,7 +46,7 @@ class AppCron {
       const result = await this.runBot();
       if (result) {
         console.log('✅Повідомлення відправлене.');
-        console.log(`🕒Наступна запланована відправка: ${this.getNextScheduledTime()}`);
+        console.log(`🕒Запланована наступна відправка: ${this.getNextScheduledTime()}`);
         this.playSound(this.config.successSoundFile);
       } else {
         console.error('❌Відправка не вдалася.');
