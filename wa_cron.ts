@@ -16,8 +16,7 @@ class AppCron {
   public async isSentToday(): Promise<boolean> {
     try {
       const stats = await fs.stat(this.sentOkPath);
-      stats.isFile();
-      return true;
+      return stats.isFile();
     } catch (err) {
       return false;
     }
