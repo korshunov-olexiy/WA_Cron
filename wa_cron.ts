@@ -23,23 +23,26 @@ class AppCron {
   }
 
   public async start() {
+    const now = new Date();
+    const [hour, minute] = this.config.sendTime.split(':').map(Number);
     let scheduledDate: Date;
-    scheduledDate = new Date();
-    if (await this.isSentToday()) {   // Якщо файл існує – плануємо відправку на завтра
-      // await fs.access(this.sentOkPath);
-      await fs.unlink(this.sentOkPath);
+      if (await this.isSentToday()) {
+      // Якщо файл існує – запланувати відправку на завтра і видалити файл
+      scheduledDate = new Date(now);
       scheduledDate.setDate(scheduledDate.getDate() + 1);
+      scheduledDate.setHours(hour, minute, 0, 0);
+      await fs.unlink(this.sentOkPath).catch(err => console.error('❌Не вдалося видалити файл sent_ok:', err));
       console.log(`🕒Запланована наступна відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
-    } else {   // Файл не знайдено – плануємо відправку на сьогодні
-      const scheduledToday = new Date(scheduledDate);
-      const [hour, minute] = this.config.sendTime.split(':');
-      scheduledDate.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
-      if (scheduledToday <= new Date()) {
-        scheduledToday.setDate(scheduledToday.getDate() + 1);
+    } else {
+      // Якщо файл не знайдено – запланувати відправку на сьогодні, якщо час у майбутньому, інакше на завтра
+      scheduledDate = new Date(now);
+      scheduledDate.setHours(hour, minute, 0, 0);
+      if (scheduledDate <= now) {
+        scheduledDate.setDate(scheduledDate.getDate() + 1);
       }
-      scheduledDate = scheduledToday;
       console.log(`🕒Запланована відправка: ${this.formatDate(scheduledDate)} ${this.config.sendTime}`);
     }
+  
     const cronExpression = this.getCronExpressionForDate(scheduledDate, this.config.sendTime);
     this.cronTask = cron.schedule(cronExpression, async () => {
       const result = await this.runBot();
