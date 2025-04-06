@@ -1,8 +1,9 @@
-import makeWASocket, { Browsers, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
-import pino from 'pino';
+import makeWASocket, { Browsers, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import { existsSync, readFileSync } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import pino from 'pino';
 
 export interface Config {
   group: string;
@@ -27,8 +28,8 @@ export class WhatsAppBot {
   private saveCreds: any;
   private reconnectTimeoutId: NodeJS.Timeout | null = null;
 
-  constructor(config: Config) {
-    this.config = config;
+  constructor(configPath: string) {
+    this.config = this.readConfig(configPath);
     if (!this.config.app_name) this.config.app_name = "WA_bot";
     this.maxAttempts = Math.ceil((5 * 60 * 1000) / 30000);
     const now = new Date();
@@ -36,6 +37,14 @@ export class WhatsAppBot {
     const scheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sendHour, sendMinute, 0);
     this.deadline = new Date(scheduled.getTime() + 5 * 60000);
     this.sentOkPath = path.join(__dirname, 'sent_ok');
+  }
+
+  private readConfig(filePath: string): Config {
+    const fullPath = path.resolve(__dirname, filePath);
+    if (!existsSync(fullPath)) {
+      throw new Error(`Файл ${filePath} не знайдено.`);
+    }
+    return JSON.parse(readFileSync(fullPath, 'utf-8'));
   }
 
   public async run(): Promise<boolean> {
@@ -182,3 +191,6 @@ export class WhatsAppBot {
     }
   }
 }
+
+const bot = new WhatsAppBot('./config.json');
+bot.run().catch(console.error);
