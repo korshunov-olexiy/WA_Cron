@@ -1,7 +1,6 @@
 import { Boom } from '@hapi/boom';
-import makeWASocket, { Browsers, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import makeWASocket, { Browsers, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import { existsSync, readFileSync } from 'fs';
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import pino from 'pino';
 
@@ -16,27 +15,14 @@ export interface Config {
 
 export class WhatsAppBot {
   private config: Config;
-  private sock: any;
+  private sock: WASocket | null = null;
   private targetJid: string | null = null;
   private isConnected = false;
-  private sent = false;
-  private attempts = 0;
-  private maxAttempts: number;
-  private deadline: Date;
-  private sentOkPath: string;
-  private finished = false;
   private saveCreds: any;
-  private reconnectTimeoutId: NodeJS.Timeout | null = null;
 
   constructor(configPath: string) {
     this.config = this.readConfig(configPath);
-    if (!this.config.app_name) this.config.app_name = "WA_bot";
-    this.maxAttempts = Math.ceil((5 * 60 * 1000) / 30000);
-    const now = new Date();
-    const [sendHour, sendMinute] = this.config.sendTime.split(':').map(Number);
-    const scheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sendHour, sendMinute, 0);
-    this.deadline = new Date(scheduled.getTime() + 5 * 60000);
-    this.sentOkPath = path.join(__dirname, 'sent_ok');
+    if (!this.config.app_name) this.config.app_name = 'WA_bot';
   }
 
   private readConfig(filePath: string): Config {
@@ -47,63 +33,18 @@ export class WhatsAppBot {
     return JSON.parse(readFileSync(fullPath, 'utf-8'));
   }
 
-  public async run(): Promise<boolean> {
-    try {
-      await this.connectToWhatsApp();
-      const result = await this.trySendMessage();
-      return result;
-    } catch (error) {
-      console.error("Помилка роботи WhatsAppBot:", error);
-      await this.cleanup();
-      return false;
+  public async run(): Promise<void> {
+    await this.connectToWhatsApp();
+    if (this.targetJid) {
+      await this.sendMessage();
     }
   }
-
-  private connectionUpdateHandler = async (update: any) => {
-    if (this.finished) return;
-    const { connection, lastDisconnect } = update;
-    if (connection === 'open') {
-      this.isConnected = true;
-      console.log('✅ Підключення до WhatsApp успішне');
-      if (!this.targetJid && this.config.group) {
-        try {
-          const groups = await this.sock.groupFetchAllParticipating();
-          for (const [jid, groupInfo] of Object.entries(groups)) {
-            if ((groupInfo as any).subject === this.config.group) {
-              this.targetJid = jid;
-              break;
-            }
-          }
-          if (!this.targetJid) {
-            console.error(`⚠ Група "${this.config.group}" не знайдена.`);
-          }
-        } catch (err) {
-          console.error('Помилка отримання груп:', err);
-        }
-      }
-    } else if (connection === 'close') {
-      this.isConnected = false;
-      const error = lastDisconnect?.error;
-      const shouldReconnect = !(error && (error instanceof Boom) && error.output?.statusCode === 401);
-      console.warn('З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
-      if (shouldReconnect) {
-        this.reconnectTimeoutId = setTimeout(() => {
-          if (!this.finished) {
-            this.connectToWhatsApp().catch(err => {
-              console.error('Не вдалося перепідключитись:', err);
-            });
-          }
-        }, 5000);
-      } else {
-        console.error('Користувач вийшов із WhatsApp.');
-      }
-    }
-  };
 
   private async connectToWhatsApp(): Promise<void> {
     try {
       const { state, saveCreds } = await useMultiFileAuthState('auth_info');
       this.saveCreds = saveCreds;
+
       this.sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
@@ -111,83 +52,52 @@ export class WhatsAppBot {
         printQRInTerminal: true,
         keepAliveIntervalMs: 60000,
       });
+
       this.sock.ev.on('creds.update', this.saveCreds);
-      this.sock.ev.on('connection.update', this.connectionUpdateHandler);
-      await new Promise<void>((resolve, reject) => {
-        const checkInterval = setInterval(() => {
-          if (this.isConnected && this.targetJid) {
-            clearInterval(checkInterval);
-            clearTimeout(timeoutId);
-            resolve();
+      this.sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+
+        if (connection === 'open') {
+          this.isConnected = true;
+          console.log('✅ Успішно підключено до WhatsApp');
+
+          const groups = await this.sock!.groupFetchAllParticipating();
+          const groupMetadata = Object.values(groups).find((group) => group.subject === this.config.group);
+          this.targetJid = groupMetadata?.id || null;
+
+          if (!this.targetJid) {
+            console.error(`⚠ Групу "${this.config.group}" не знайдено.`);
           }
-        }, 1000);
-        const timeoutId = setTimeout(() => {
-          clearInterval(checkInterval);
-          if (this.isConnected && this.targetJid) {
-            resolve();
+        } else if (connection === 'close') {
+          this.isConnected = false;
+          const error = lastDisconnect?.error;
+          const shouldReconnect = !(error instanceof Boom && error.output?.statusCode === 401);
+
+          console.warn('З\'єднання розірвано:', error?.message || error, '| Перепідключення:', shouldReconnect);
+          if (shouldReconnect) {
+            setTimeout(() => this.connectToWhatsApp(), 5000);
           } else {
-            reject(new Error("💥Не вдалося встановити з'єднання або отримати targetJid"));
+            console.error('❌ Користувач вийшов із WhatsApp.');
           }
-        }, 30000);
+        }
       });
-    } catch (err) {
-      console.error('💥Помилка підключення до WhatsApp:', err);
-      throw err;
+    } catch (error) {
+      console.error('💥 Помилка підключення до WhatsApp:', error);
+      throw error;
     }
   }
 
-  private trySendMessage(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const intervalId = setInterval(async () => {
-        this.attempts++;
-        try {
-          if (this.isConnected && this.targetJid) {
-            await this.sock.sendMessage(this.targetJid, { text: this.config.message });
-            this.sent = true;
-            clearInterval(intervalId);
-            try {
-              await fs.writeFile(this.sentOkPath, 'ok');
-            } catch (err) {
-              console.error('💥Помилка запису файлу sent_ok:', err);
-            }
-            await this.cleanup();
-            resolve(true);
-          } else {
-            console.log('Очікування підключення або отримання targetJid...');
-          }
-          if (new Date() >= this.deadline) {
-            clearInterval(intervalId);
-            if (!this.sent) {
-              console.error('❌Не вдалося відправити повідомлення протягом 5 хвилин.');
-              await this.cleanup();
-              resolve(false);
-            }
-          }
-        } catch (err) {
-          console.error('💥Помилка при спробі відправлення:', err);
-        }
-      }, 30000);
-    });
-  }
-
-  private async cleanup(): Promise<void> {
-    this.finished = true;
-    if (this.reconnectTimeoutId) {
-      clearTimeout(this.reconnectTimeoutId);
-      this.reconnectTimeoutId = null;
+  private async sendMessage(): Promise<void> {
+    if (!this.isConnected || !this.targetJid) {
+      console.error('❌ Відправка повідомлення неможлива: немає підключення або ID групи.');
+      return;
     }
-    if (this.sock) {
-      this.sock.ev.off('creds.update', this.saveCreds);
-      this.sock.ev.off('connection.update', this.connectionUpdateHandler);
-      if (typeof this.sock.logout === 'function') {
-        try {
-          await this.sock.logout();
-        } catch (error) {
-          console.error('Помилка при виході з сесії:', error);
-        }
-      } else {
-        console.error('Метод logout не визначений, неможливо закрити з’єднання.');
-      }
+
+    try {
+      await this.sock!.sendMessage(this.targetJid, { text: this.config.message });
+      console.log('✅ Повідомлення успішно відправлено');
+    } catch (error) {
+      console.error('💥 Помилка відправки повідомлення:', error);
     }
   }
 }
